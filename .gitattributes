@@ -6,6 +6,11 @@
 *.hxx linguist-language=C++
 *.inl linguist-language=C++
 
+*.glsl linguist-language=GLSL
+*.vert linguist-language=GLSL
+*.frag linguist-language=GLSL
+*.hlsl linguist-language=HLSL
+
 shaders/ linguist-vendored
 build/ linguist-vendored
 cmake-build-*/ linguist-vendored
