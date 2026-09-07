@@ -1,25 +1,8 @@
 // main.cpp
-#include <iostream>
+#include "Application.hpp"
 
-#include "GLWindow.hpp"
-
-
-int main()
+int main(int argc, char* argv[])
 {
-#ifdef _WIN32
-    system("chcp 65001 > nul");
-#endif
-
-    try
-    {
-        vkp::GLWindow window;
-        window.run();
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return -1;
-    }
-
-    std::cin.get();
+    vkp::Application app;
+    app.run();
 }

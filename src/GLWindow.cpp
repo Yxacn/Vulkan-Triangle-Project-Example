@@ -10,6 +10,45 @@ int vkp::GLWindow::sm_glfwRefCount{ 0 };
 vkp::GLWindow::GLWindow(const WindowInfo& window_info)
     : m_w_info(window_info)
 {
+    initWindow();
+    createWindow();
+}
+
+vkp::GLWindow::~GLWindow()
+{
+    if (m_window)
+    {
+        destroyWindow();
+        if (--sm_glfwRefCount == 0)
+            glfwTerminate();
+    }
+}
+
+vkp::GLWindow::GLWindow(GLWindow&& other) noexcept
+    : m_w_info(std::move(other.m_w_info))
+    , m_window(other.m_window)
+{
+    other.m_window = nullptr;
+}
+
+vkp::GLWindow& vkp::GLWindow::operator=(GLWindow&& other) noexcept
+{
+    if (this != &other)
+    {
+        // 1. 释放当前对象资源
+        destroyWindow();
+        // 2. 转移资源
+        m_w_info = std::move(other.m_w_info);
+        m_window = other.m_window;
+
+        // 3. 清空源对象
+        other.m_window = nullptr;
+    }
+    return *this;
+}
+
+void vkp::GLWindow::initWindow()
+{
     if (sm_glfwRefCount++ == 0)
     {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // 防止glfw产生opengl相关文件 (glfw是为opengl两针打造)
@@ -21,82 +60,22 @@ vkp::GLWindow::GLWindow(const WindowInfo& window_info)
             throw std::runtime_error("glfw初始化异常!");
         }
     }
-    m_ownsGlfwRef = true; // 成功获取 GLFW 引用
-
-    try
-    {
-        createWindow();
-    }
-    catch (...)
-    {
-        // 回滚：销毁窗口并释放引用
-        destroyWindow();
-        if (m_ownsGlfwRef && --sm_glfwRefCount == 0)
-            glfwTerminate();
-        // 对象未完全构造，析构不会执行，因此无需额外操作
-        throw;
-    }
-}
-
-vkp::GLWindow::~GLWindow()
-{
-    if (m_ownsGlfwRef)
-    {
-        destroyWindow();
-        if (--sm_glfwRefCount == 0)
-            glfwWaitEvents();
-    }
-}
-
-vkp::GLWindow::GLWindow(GLWindow&& other) noexcept
-    : m_w_info(std::move(other.m_w_info))
-    , m_window(other.m_window)
-    , m_ownsGlfwRef(other.m_ownsGlfwRef)
-{
-    other.m_window = nullptr;
-    other.m_ownsGlfwRef = false; // 源对象放弃所有权
-}
-
-vkp::GLWindow& vkp::GLWindow::operator=(GLWindow&& other) noexcept
-{
-    if (this != &other)
-    {
-        // 1. 释放当前对象资源（如有）
-        if (m_ownsGlfwRef)
-        {
-            destroyWindow();
-            if (--sm_glfwRefCount == 0)
-                glfwTerminate();
-            m_ownsGlfwRef = false;
-        }
-
-        // 2. 转移资源
-        m_w_info = std::move(other.m_w_info);
-        m_window = other.m_window;
-        m_ownsGlfwRef = other.m_ownsGlfwRef;
-
-        // 3. 清空源对象
-        other.m_window = nullptr;
-        other.m_ownsGlfwRef = false;
-    }
-    return *this;
-}
-
-void vkp::GLWindow::run()
-{
-    while (!glfwWindowShouldClose(m_window))
-    {
-        glfwWaitEvents(); // 可考虑改为 glfwWaitEvents() 降低 CPU 占用
-    }
 }
 
 void vkp::GLWindow::createWindow()
 {
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     m_window =
         glfwCreateWindow(m_w_info.WindowWidth, m_w_info.WindowHeight, m_w_info.WindowTitle.c_str(), nullptr, nullptr);
     if (!m_window)
         throw std::runtime_error("glfw窗口创建失败");
     centerWindow();
+}
+
+GLFWwindow* vkp::GLWindow::getWindowInstance() const
+{
+    return m_window;
 }
 
 void vkp::GLWindow::centerWindow()
