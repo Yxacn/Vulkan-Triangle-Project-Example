@@ -52,24 +52,6 @@ pacman -S mingw-w64-ucrt-x86_64-gcc \
           mingw-w64-ucrt-x86_64-gdb
 ```
 ---
-## 其他平台安装方式
-
-## 1. 安装 Vulkan SDK
-
-- **Windows**  
-  下载并运行 [Vulkan SDK 安装程序](https://vulkan.lunarg.com/sdk/home)。  
-  安装后，确保环境变量 `VULKAN_SDK` 指向安装目录（安装程序通常会自动设置）。  
-  将 `%VULKAN_SDK%/Bin` 添加到 `PATH` 以便使用 `glslc`。
-
-- **Linux (Ubuntu/Debian)**  
-  可从 LunarG 官网下载 `.tar.gz` 包并解压，或使用包管理器安装（版本可能较旧）：  
-  ```bash
-  sudo apt update
-  sudo apt install vulkan-sdk
-
-## 2.安装其他依赖项
-
----
 ## 构建与运行
 ### 1. 克隆项目
 ```
