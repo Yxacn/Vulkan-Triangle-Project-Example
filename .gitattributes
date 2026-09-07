@@ -1,0 +1,7 @@
+*.cpp linguist-language=C++
+*.hpp linguist-language=C++
+
+shaders/* linguist-vendored
+
+build/* linguist-vendored
+cmake-build-*/* linguist-vendored
