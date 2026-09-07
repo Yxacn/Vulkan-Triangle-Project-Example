@@ -3,7 +3,7 @@
 ## 项目声明
 
 - 本项目是作者学习 **Vulkan** 图形编程的练习项目，旨在深入理解 Vulkan 渲染管线及资源管理。
-- 部分代码由 **AI 辅助生成**，可能含有部分问题。
+- 部分代码（尤其是初始框架和调试逻辑）由 **AI 辅助生成**，可能含有部分问题。
 
 ---
 
@@ -36,7 +36,25 @@
 
 ## 安装依赖
 
-### 1. 安装 Vulkan SDK
+### 使用 MSYS2 (UCRT64 环境)
+
+在 Windows 上，推荐使用 **MSYS2** 的 **UCRT64** 环境快速安装所有必需工具和库。  
+安装 [MSYS2](https://www.msys2.org/) 后，启动 **UCRT64** 终端，执行以下命令：
+
+```bash
+pacman -Syu                 # 更新包数据库
+pacman -S mingw-w64-ucrt-x86_64-gcc \
+          mingw-w64-ucrt-x86_64-cmake \
+          mingw-w64-ucrt-x86_64-vulkan-headers \
+          mingw-w64-ucrt-x86_64-vulkan-loader \
+          mingw-w64-ucrt-x86_64-glfw \
+          mingw-w64-ucrt-x86_64-glm \
+          mingw-w64-ucrt-x86_64-gdb
+```
+---
+## 其他平台安装方式
+
+## 1. 安装 Vulkan SDK
 
 - **Windows**  
   下载并运行 [Vulkan SDK 安装程序](https://vulkan.lunarg.com/sdk/home)。  
@@ -48,3 +66,33 @@
   ```bash
   sudo apt update
   sudo apt install vulkan-sdk
+
+---
+## 构建与运行
+### 1. 克隆项目
+```
+git clone <repository-url>
+cd <project-directory>
+```
+
+### 2.使用 CMake 构建
+```
+mkdir build && cd build
+cmake ..
+cmake --build
+```
+
+### 3.运行
+```
+./VkProject.exe
+```
+
+## 注意事项
+### 验证层：
+在 Debug 模式下默认启用（NDEBUG 未定义）。若 Vulkan SDK 未安装验证层，程序将抛出异常。可在 Release 模式下禁用。
+
+### 着色器路径：
+代码中通过宏 SHADER_DIR 指定 .spv 文件所在目录，若未定义则默认 "shaders/"。请确保运行目录可访问该路径。
+
+### 窗口大小：
+当前窗口大小固定（800×600），不可调整。如需可调整，可修改 GLWindow::initWindow() 中的 GLFW_RESIZABLE 为 GLFW_TRUE，并实现 recreateSwapChain 逻辑（已支持）
