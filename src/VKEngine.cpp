@@ -1,7 +1,6 @@
 #include "VKEngine.hpp"
 
 #include <algorithm>
-#include <chrono>
 #include <cstring>
 #include <fstream>
 #include <iostream>
