@@ -67,6 +67,8 @@ pacman -S mingw-w64-ucrt-x86_64-gcc \
   sudo apt update
   sudo apt install vulkan-sdk
 
+## 2.安装其他依赖项
+
 ---
 ## 构建与运行
 ### 1. 克隆项目
