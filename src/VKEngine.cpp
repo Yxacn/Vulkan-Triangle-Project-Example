@@ -18,16 +18,18 @@ namespace vkp
         , m_appInfo(app_info)
         , m_createInfo(instance_create_info)
     {
-        initVulkan();
+        initVulkan(); // 初始化所有Vulkan组件
     }
 
     VKEngine::~VKEngine()
     {
+        // 等待设备空闲，然后依次释放资源
         if (m_device != VK_NULL_HANDLE)
             vkDeviceWaitIdle(m_device);
 
         cleanupSwapChain();
 
+        // 释放 Uniform Buffers
         for (auto& ub : m_uniformBuffers)
         {
             if (ub.buffer)
@@ -71,6 +73,7 @@ namespace vkp
             vkDestroyInstance(m_instance, nullptr);
     }
 
+    // 移动构造函数：转移所有资源所有权
     VKEngine::VKEngine(VKEngine&& other) noexcept
         : m_window(std::exchange(other.m_window, nullptr))
         , m_instance(std::exchange(other.m_instance, VK_NULL_HANDLE))
@@ -103,6 +106,7 @@ namespace vkp
         , m_appInfo(other.m_appInfo)
         , m_createInfo(other.m_createInfo)
     {
+        // 如果m_createInfo引用了other.m_appInfo，则调整为引用当前对象的m_appInfo
         if (m_createInfo.pApplicationInfo == &other.m_appInfo)
         {
             m_createInfo.pApplicationInfo = &m_appInfo;
@@ -114,6 +118,7 @@ namespace vkp
         }
     }
 
+    // 移动赋值：使用swap技巧实现异常安全
     VKEngine& VKEngine::operator=(VKEngine&& other) noexcept
     {
         if (this != &other)
@@ -157,30 +162,36 @@ namespace vkp
         return *this;
     }
 
+    // 绘制一帧：获取图像、更新UBO、记录命令缓冲、提交并呈现
     void VKEngine::drawFrame()
     {
         uint32_t frameIdx = m_currentFrame;
 
+        // 等待当前帧的Fence（保证上一帧完成）
         vkWaitForFences(m_device, 1, &m_inFlightFences[frameIdx], VK_TRUE, UINT64_MAX);
         vkResetFences(m_device, 1, &m_inFlightFences[frameIdx]);
 
+        // 从交换链获取下一张图像
         uint32_t imageIndex;
         VkResult result = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[frameIdx],
                                                 VK_NULL_HANDLE, &imageIndex);
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
         {
-            recreateSwapChain();
+            recreateSwapChain(); // 交换链失效，重新创建
             return;
         }
         else if (result != VK_SUCCESS)
             throw std::runtime_error("Failed to acquire swap chain image!");
 
+        // 更新当前帧的Uniform Buffer
         updateUniformBuffer(frameIdx);
 
+        // 记录命令缓冲（使用当前帧的描述符集）
         VkCommandBuffer cmd = m_commandBuffers[imageIndex];
         vkResetCommandBuffer(cmd, 0);
         recordCommandBuffer(cmd, m_swapChainFramebuffers[imageIndex], m_descriptorSets[frameIdx]);
 
+        // 提交命令缓冲
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         VkSemaphore waitSemaphores[] = { m_imageAvailableSemaphores[frameIdx] };
@@ -197,6 +208,7 @@ namespace vkp
         if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[frameIdx]) != VK_SUCCESS)
             throw std::runtime_error("Failed to submit draw command buffer!");
 
+        // 呈现图像
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         presentInfo.waitSemaphoreCount = 1;
@@ -212,6 +224,7 @@ namespace vkp
         else if (result != VK_SUCCESS)
             throw std::runtime_error("Failed to present swap chain image!");
 
+        // 更新当前帧索引
         m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
@@ -221,6 +234,7 @@ namespace vkp
             vkDeviceWaitIdle(m_device);
     }
 
+    // 初始化所有Vulkan组件
     void VKEngine::initVulkan()
     {
         createInstance();
@@ -243,8 +257,10 @@ namespace vkp
         createSyncObjects();
     }
 
+    // 创建Vulkan实例
     void VKEngine::createInstance()
     {
+        // 检查验证层是否可用
         if (m_enableValidationLayers)
         {
             uint32_t layerCount;
@@ -277,6 +293,7 @@ namespace vkp
             m_createInfo.ppEnabledLayerNames = nullptr;
         }
 
+        // 获取GLFW所需的实例扩展
         uint32_t glfwExtensionCount = 0;
         const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
         std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
@@ -294,6 +311,7 @@ namespace vkp
         }
     }
 
+    // 创建窗口表面
     void VKEngine::createSurface()
     {
         if (glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface) != VK_SUCCESS)
@@ -309,6 +327,7 @@ namespace vkp
         }
     }
 
+    // 选择合适的物理设备
     void VKEngine::pickPhysicalDevice()
     {
         uint32_t deviceCount = 0;
@@ -322,6 +341,7 @@ namespace vkp
 
         for (const auto& device : devices)
         {
+            // 检查队列族支持
             uint32_t queueFamilyCount = 0;
             vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
             std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
@@ -342,6 +362,7 @@ namespace vkp
             if (!graphicsFound || !presentFound)
                 continue;
 
+            // 检查设备扩展
             uint32_t extensionCount;
             vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
             std::vector<VkExtensionProperties> availableExtensions(extensionCount);
@@ -368,6 +389,7 @@ namespace vkp
             if (!allExtensionsSupported)
                 continue;
 
+            // 检查表面格式和呈现模式是否非空
             uint32_t formatCount;
             vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_surface, &formatCount, nullptr);
             uint32_t presentModeCount;
@@ -385,6 +407,7 @@ namespace vkp
         }
     }
 
+    // 创建逻辑设备
     void VKEngine::createLogicalDevice()
     {
         uint32_t queueFamilyCount = 0;
@@ -413,6 +436,7 @@ namespace vkp
             throw std::runtime_error("Could not find required queue families!");
         }
 
+        // 创建队列（去重）
         std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
         std::set<int> uniqueFamilies = { graphicsFamily, presentFamily };
         float queuePriority = 1.0f;
@@ -447,8 +471,10 @@ namespace vkp
         vkGetDeviceQueue(m_device, presentFamily, 0, &m_presentQueue);
     }
 
+    // 创建交换链
     void VKEngine::createSwapChain()
     {
+        // 选择表面格式
         uint32_t formatCount;
         vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, m_surface, &formatCount, nullptr);
         std::vector<VkSurfaceFormatKHR> formats(formatCount);
@@ -465,6 +491,7 @@ namespace vkp
         }
         m_swapChainImageFormat = chosenFormat.format;
 
+        // 选择呈现模式（优先Mailbox）
         uint32_t modeCount;
         vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, m_surface, &modeCount, nullptr);
         std::vector<VkPresentModeKHR> presentModes(modeCount);
@@ -480,6 +507,7 @@ namespace vkp
             }
         }
 
+        // 获取表面能力并确定交换链尺寸
         VkSurfaceCapabilitiesKHR capabilities;
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, m_surface, &capabilities);
         if (capabilities.currentExtent.width != UINT32_MAX)
@@ -498,6 +526,7 @@ namespace vkp
             m_swapChainExtent = actualExtent;
         }
 
+        // 图像数量（至少minImageCount+1）
         uint32_t imageCount = capabilities.minImageCount + 1;
         if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount)
         {
@@ -514,6 +543,7 @@ namespace vkp
         createInfo.imageArrayLayers = 1;
         createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
+        // 如果图形和呈现队列不同，使用并发共享模式
         uint32_t queueFamilyIndices[] = { static_cast<uint32_t>(m_graphicsFamily),
                                           static_cast<uint32_t>(m_presentFamily) };
         if (m_graphicsFamily != m_presentFamily)
@@ -543,6 +573,7 @@ namespace vkp
         vkGetSwapchainImagesKHR(m_device, m_swapChain, &imageCount, m_swapChainImages.data());
     }
 
+    // 创建图像视图
     void VKEngine::createImageViews()
     {
         m_swapChainImageViews.resize(m_swapChainImages.size());
@@ -570,6 +601,7 @@ namespace vkp
         }
     }
 
+    // 创建渲染通道
     void VKEngine::createRenderPass()
     {
         VkAttachmentDescription colorAttachment{};
@@ -614,6 +646,7 @@ namespace vkp
         }
     }
 
+    // 创建描述符集布局（UBO绑定）
     void VKEngine::createDescriptorSetLayout()
     {
         VkDescriptorSetLayoutBinding uboLayoutBinding{};
@@ -633,6 +666,7 @@ namespace vkp
         }
     }
 
+    // 创建图形管线
     void VKEngine::createGraphicsPipeline()
     {
         auto readFile = [](const std::string& filename) -> std::vector<char>
@@ -674,6 +708,7 @@ namespace vkp
 
         VkPipelineShaderStageCreateInfo shaderStages[] = { vertStageInfo, fragStageInfo };
 
+        // 顶点输入描述
         auto bindingDesc = VkVertexInputBindingDescription{ .binding = 0,
                                                             .stride = sizeof(Vertex),
                                                             .inputRate = VK_VERTEX_INPUT_RATE_VERTEX };
@@ -692,16 +727,19 @@ namespace vkp
         vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attrDescs.size());
         vertexInputInfo.pVertexAttributeDescriptions = attrDescs.data();
 
+        // 输入装配
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
         inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
         inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         inputAssembly.primitiveRestartEnable = VK_FALSE;
 
+        // 视口和裁剪（动态）
         VkPipelineViewportStateCreateInfo viewportState{};
         viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
         viewportState.viewportCount = 1;
         viewportState.scissorCount = 1;
 
+        // 光栅化
         VkPipelineRasterizationStateCreateInfo rasterizer{};
         rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
         rasterizer.depthClampEnable = VK_FALSE;
@@ -712,11 +750,13 @@ namespace vkp
         rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         rasterizer.depthBiasEnable = VK_FALSE;
 
+        // 多重采样（禁用）
         VkPipelineMultisampleStateCreateInfo multisampling{};
         multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         multisampling.sampleShadingEnable = VK_FALSE;
         multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
+        // 颜色混合
         VkPipelineColorBlendAttachmentState colorBlendAttachment{};
         colorBlendAttachment.colorWriteMask =
             VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -728,12 +768,14 @@ namespace vkp
         colorBlending.attachmentCount = 1;
         colorBlending.pAttachments = &colorBlendAttachment;
 
+        // 动态状态
         std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
         VkPipelineDynamicStateCreateInfo dynamicState{};
         dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
         dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
         dynamicState.pDynamicStates = dynamicStates.data();
 
+        // 管线布局
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
@@ -744,6 +786,7 @@ namespace vkp
             throw std::runtime_error("Failed to create pipeline layout!");
         }
 
+        // 创建管线
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipelineInfo.stageCount = 2;
@@ -770,6 +813,7 @@ namespace vkp
         vkDestroyShaderModule(m_device, fragModule, nullptr);
     }
 
+    // 创建帧缓冲
     void VKEngine::createFramebuffers()
     {
         m_swapChainFramebuffers.resize(m_swapChainImageViews.size());
@@ -793,6 +837,7 @@ namespace vkp
         }
     }
 
+    // 创建命令池
     void VKEngine::createCommandPool()
     {
         VkCommandPoolCreateInfo poolInfo{};
@@ -806,6 +851,7 @@ namespace vkp
         }
     }
 
+    // 创建顶点缓冲
     void VKEngine::createVertexBuffer()
     {
         std::vector<Vertex> vertices = {
@@ -816,6 +862,7 @@ namespace vkp
 
         VkDeviceSize bufferSize = sizeof(Vertex) * vertices.size();
 
+        // 创建暂存缓冲，用于上传数据
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingMemory;
         createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -827,6 +874,7 @@ namespace vkp
         memcpy(data, vertices.data(), bufferSize);
         vkUnmapMemory(m_device, stagingMemory);
 
+        // 创建设备本地缓冲并复制
         createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_vertexBuffer.buffer, m_vertexBuffer.memory);
 
@@ -836,6 +884,7 @@ namespace vkp
         vkFreeMemory(m_device, stagingMemory, nullptr);
     }
 
+    // 创建索引缓冲
     void VKEngine::createIndexBuffer()
     {
         std::vector<uint32_t> indices = { 0, 1, 2 };
@@ -862,6 +911,7 @@ namespace vkp
         vkFreeMemory(m_device, stagingMemory, nullptr);
     }
 
+    // 创建Uniform Buffers（每帧一个）
     void VKEngine::createUniformBuffers()
     {
         VkDeviceSize bufferSize = sizeof(glm::mat4) * 3;
@@ -874,6 +924,7 @@ namespace vkp
         }
     }
 
+    // 创建描述符池
     void VKEngine::createDescriptorPool()
     {
         VkDescriptorPoolSize poolSize{};
@@ -892,6 +943,7 @@ namespace vkp
         }
     }
 
+    // 分配描述符集并绑定UBO
     void VKEngine::createDescriptorSets()
     {
         std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, m_descriptorSetLayout);
@@ -927,6 +979,7 @@ namespace vkp
         }
     }
 
+    // 创建命令缓冲（每张交换链图像一个）
     void VKEngine::createCommandBuffers()
     {
         uint32_t imageCount = static_cast<uint32_t>(m_swapChainImages.size());
@@ -944,6 +997,7 @@ namespace vkp
         }
     }
 
+    // 创建同步对象（信号量和栅栏）
     void VKEngine::createSyncObjects()
     {
         VkSemaphoreCreateInfo semaphoreInfo{};
@@ -973,6 +1027,7 @@ namespace vkp
         }
     }
 
+    // 清理交换链相关资源（用于重建）
     void VKEngine::cleanupSwapChain()
     {
         for (auto& fb : m_swapChainFramebuffers)
@@ -1001,6 +1056,7 @@ namespace vkp
         }
     }
 
+    // 重建交换链（窗口变化或失效时）
     void VKEngine::recreateSwapChain()
     {
         vkDeviceWaitIdle(m_device);
@@ -1013,6 +1069,7 @@ namespace vkp
         m_currentFrame = 0;
     }
 
+    // 查找合适的内存类型
     uint32_t VKEngine::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const
     {
         VkPhysicalDeviceMemoryProperties memProperties;
@@ -1027,6 +1084,7 @@ namespace vkp
         throw std::runtime_error("Failed to find suitable memory type!");
     }
 
+    // 创建着色器模块
     VkShaderModule VKEngine::createShaderModule(const std::vector<char>& code) const
     {
         VkShaderModuleCreateInfo createInfo{};
@@ -1042,6 +1100,7 @@ namespace vkp
         return module;
     }
 
+    // 通用缓冲创建函数
     void VKEngine::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
                                 VkBuffer& buffer, VkDeviceMemory& memory) const
     {
@@ -1072,6 +1131,7 @@ namespace vkp
         vkBindBufferMemory(m_device, buffer, memory, 0);
     }
 
+    // 复制缓冲区（使用临时命令缓冲）
     void VKEngine::copyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) const
     {
         VkCommandBufferAllocateInfo allocInfo{};
@@ -1106,6 +1166,7 @@ namespace vkp
         vkFreeCommandBuffers(m_device, m_commandPool, 1, &commandBuffer);
     }
 
+    // 更新Uniform Buffer数据
     void VKEngine::updateUniformBuffer(uint32_t currentImage)
     {
         struct UniformBufferObject
@@ -1117,16 +1178,15 @@ namespace vkp
 
         UniformBufferObject ubo{};
         ubo.model = glm::mat4(1.0f);
-        ubo.view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f),  // 相机在 Z 轴正方向
-                               glm::vec3(0.0f, 0.0f, 0.0f),  // 看向原点
-                               glm::vec3(0.0f, 1.0f, 0.0f)); // Y 轴向上
+        ubo.view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         ubo.proj = glm::perspective(glm::radians(45.0f), m_swapChainExtent.width / (float)m_swapChainExtent.height,
                                     0.1f, 10.0f);
-        ubo.proj[1][1] *= -1;
+        ubo.proj[1][1] *= -1; // 翻转Y轴以适配Vulkan NDC
 
         memcpy(m_uniformBuffers[currentImage].mapped, &ubo, sizeof(ubo));
     }
 
+    // 记录命令缓冲（绘制命令）
     void VKEngine::recordCommandBuffer(VkCommandBuffer cmd, VkFramebuffer framebuffer, VkDescriptorSet descSet)
     {
         VkCommandBufferBeginInfo beginInfo{};
@@ -1138,6 +1198,7 @@ namespace vkp
             throw std::runtime_error("Failed to begin command buffer!");
         }
 
+        // 开始渲染通道
         VkRenderPassBeginInfo renderPassInfo{};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         renderPassInfo.renderPass = m_renderPass;
@@ -1150,8 +1211,10 @@ namespace vkp
 
         vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+        // 绑定管线
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
+        // 设置视口和裁剪矩形
         VkViewport viewport{};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
@@ -1166,6 +1229,7 @@ namespace vkp
         scissor.extent = m_swapChainExtent;
         vkCmdSetScissor(cmd, 0, 1, &scissor);
 
+        // 绑定顶点/索引缓冲和描述符集，绘制
         VkBuffer vertexBuffers[] = { m_vertexBuffer.buffer };
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
