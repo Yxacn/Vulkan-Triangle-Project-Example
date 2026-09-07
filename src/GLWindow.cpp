@@ -1,5 +1,4 @@
 // GLWindow.cpp
-
 #include "GLWindow.hpp"
 
 #include <stdexcept>
