@@ -62,7 +62,7 @@ cd <project-directory>
 ```
 mkdir build && cd build
 cmake ..
-cmake --build
+cmake --build .
 ```
 
 ### 3.运行
