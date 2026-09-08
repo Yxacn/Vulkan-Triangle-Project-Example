@@ -6,6 +6,24 @@
 
 namespace vkp
 {
+    // 默认Vulkan应用信息
+    inline constexpr VkApplicationInfo defaultVkappInfo{
+        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+        .pApplicationName = "VkProject",
+        .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+        .pEngineName = "Vulkan",
+        .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+        .apiVersion = VK_API_VERSION_1_3,
+    };
+    // 默认实例创建信息
+    inline constexpr VkInstanceCreateInfo defaultVkInstanceCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        .pApplicationInfo = &defaultVkappInfo,
+        .enabledLayerCount = 0,
+        .ppEnabledLayerNames = nullptr,
+        .enabledExtensionCount = 0,
+        .ppEnabledExtensionNames = nullptr,
+    };
     // 应用程序主类，组合窗口和渲染引擎
     class Application
     {

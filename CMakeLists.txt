@@ -36,6 +36,13 @@ add_executable(${PROJECT_NAME}
     src/Application.cpp
     src/GLWindow.cpp
     src/VKEngine.cpp
+    src/VulkanContext.cpp
+    src/SwapChain.cpp
+    src/RenderPassPipeline.cpp
+    src/FrameBufferManager.cpp
+    src/BufferManager.cpp
+    src/CommandManager.cpp
+    src/SyncManager.cpp
 )
 
 add_dependencies(${PROJECT_NAME} shaders)
