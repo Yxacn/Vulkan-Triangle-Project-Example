@@ -31,12 +31,6 @@ namespace vkp
         m_swapChainFramebuffers.clear();
     }
 
-    void FrameBufferManager::recreateFramebuffers(VulkanContext& context, SwapChain& swapChain, VkRenderPass renderPass)
-    {
-        destroyFramebuffers(context);
-        createFramebuffers(context, swapChain, renderPass);
-    }
-
     void FrameBufferManager::createFramebuffers(VulkanContext& context, SwapChain& swapChain, VkRenderPass renderPass)
     {
         const auto& imageViews = swapChain.getImageViews();

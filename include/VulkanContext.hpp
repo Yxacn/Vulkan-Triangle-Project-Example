@@ -8,6 +8,8 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
+#include "VkCheck.hpp"
+
 namespace vkp
 {
     class VulkanContext
@@ -27,7 +29,7 @@ namespace vkp
         [[nodiscard]] VkQueue getGraphicsQueue() const { return m_graphicsQueue; }
         [[nodiscard]] VkQueue getPresentQueue() const { return m_presentQueue; }
 
-        void waitIdle() const { vkDeviceWaitIdle(m_device); }
+        void waitIdle() const { checkVk(vkDeviceWaitIdle(m_device), "Failed to wait for device idle!"); }
 
         struct QueueFamilyIndices
         {
@@ -60,6 +62,7 @@ namespace vkp
 
         VkInstance m_instance{ VK_NULL_HANDLE };
         VkDebugUtilsMessengerEXT m_debugMessenger{ VK_NULL_HANDLE };
+        bool m_validationEnabled{ false }; // 运行期记录验证层是否真正启用（可能降级）
         VkSurfaceKHR m_surface{ VK_NULL_HANDLE };
         VkPhysicalDevice m_physicalDevice{ VK_NULL_HANDLE };
         VkDevice m_device{ VK_NULL_HANDLE };

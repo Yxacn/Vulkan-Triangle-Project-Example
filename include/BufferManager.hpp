@@ -36,12 +36,17 @@ namespace vkp
     class BufferManager
     {
     public:
-        BufferManager(VulkanContext& context, SwapChain& swapChain, RenderPassPipeline& pipeline,
-                      CommandManager& cmdManager);
+        // 构造时只创建与交换链无关的几何缓冲（顶点/索引）；
+        // 依赖交换链图像数量的 UBO/描述符由 createUniformResources 单独创建，
+        // 这样交换链重建时无需重新上传几何数据
+        BufferManager(VulkanContext& context, CommandManager& cmdManager);
         ~BufferManager();
 
         BufferManager(const BufferManager&) = delete;
         BufferManager& operator=(const BufferManager&) = delete;
+
+        void createUniformResources(VulkanContext& context, SwapChain& swapChain, RenderPassPipeline& pipeline);
+        void destroyUniformResources() noexcept;
 
         void updateUniformBuffer(uint32_t currentImage, const UniformBufferObject& ubo);
 
@@ -55,9 +60,9 @@ namespace vkp
         void createDeviceLocalBuffer(VulkanContext& context, CommandManager& cmdManager,
                                      std::span<const std::byte> data, VkBufferUsageFlags usage, VkBuffer& buffer,
                                      VkDeviceMemory& bufferMemory);
-        void createUniformBuffers(VulkanContext& context);
-        void createDescriptorPool(VulkanContext& context);
-        void createDescriptorSets(VulkanContext& context, RenderPassPipeline& pipeline);
+        void createUniformBuffers(VulkanContext& context, SwapChain& swapChain);
+        void createDescriptorPool(VulkanContext& context, SwapChain& swapChain);
+        void createDescriptorSets(VulkanContext& context, RenderPassPipeline& pipeline, SwapChain& swapChain);
 
         [[nodiscard]] uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
         void createBuffer(VulkanContext& context, VkDeviceSize size, VkBufferUsageFlags usage,
@@ -67,7 +72,6 @@ namespace vkp
         void destroyResources() noexcept;
 
         VulkanContext* m_context{ nullptr };
-        SwapChain* m_swapChain{ nullptr };
         VkPhysicalDeviceMemoryProperties m_memoryProperties{};
         VkBuffer m_vertexBuffer{ VK_NULL_HANDLE };
         VkDeviceMemory m_vertexBufferMemory{ VK_NULL_HANDLE };
@@ -80,10 +84,11 @@ namespace vkp
         VkDescriptorPool m_descriptorPool{ VK_NULL_HANDLE };
         std::vector<VkDescriptorSet> m_descriptorSets;
 
-        const std::array<Vertex, 3> m_vertices = { { { { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
-                                                     { { 0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
-                                                     { { 0.0f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } } } };
-        const std::array<uint16_t, 3> m_indices = { 0, 1, 2 };
+        // 几何数据为编译期常量：所有实例共享同一份只读数据，避免每个实例拷贝一份顶点/索引
+        static constexpr std::array<Vertex, 3> m_vertices = { { { { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+                                                                 { { 0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+                                                                 { { 0.0f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } } } };
+        static constexpr std::array<uint16_t, 3> m_indices = { 0, 1, 2 };
     };
 
 } // namespace vkp

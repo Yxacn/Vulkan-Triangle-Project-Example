@@ -52,19 +52,14 @@ namespace
 
 namespace vkp
 {
-    BufferManager::BufferManager(VulkanContext& context, SwapChain& swapChain, RenderPassPipeline& pipeline,
-                                 CommandManager& cmdManager)
+    BufferManager::BufferManager(VulkanContext& context, CommandManager& cmdManager)
         : m_context(&context)
-        , m_swapChain(&swapChain)
     {
         vkGetPhysicalDeviceMemoryProperties(context.getPhysicalDevice(), &m_memoryProperties);
         try
         {
             createVertexBuffer(context, cmdManager);
             createIndexBuffer(context, cmdManager);
-            createUniformBuffers(context);
-            createDescriptorPool(context);
-            createDescriptorSets(context, pipeline);
         }
         catch (...)
         {
@@ -78,7 +73,18 @@ namespace vkp
         destroyResources();
     }
 
-    void BufferManager::destroyResources() noexcept
+    // 交换链重建时调用：只重建与交换链图像数量相关的 UBO/描述符池/描述符集，
+    // 顶点/索引等几何缓冲保持不变，避免重复上传设备本地内存
+    void BufferManager::createUniformResources(VulkanContext& context, SwapChain& swapChain,
+                                               RenderPassPipeline& pipeline)
+    {
+        createUniformBuffers(context, swapChain);
+        createDescriptorPool(context, swapChain);
+        createDescriptorSets(context, pipeline, swapChain);
+    }
+
+    // 与 createUniformResources 配对；内部对半初始化状态做防御，可安全重复调用
+    void BufferManager::destroyUniformResources() noexcept
     {
         if (!m_context)
             return;
@@ -112,7 +118,17 @@ namespace vkp
             m_descriptorPool = VK_NULL_HANDLE;
         }
         m_descriptorSets.clear();
+    }
 
+    // 析构兜底：先清理随交换链重建的资源，再销毁常驻几何缓冲
+    void BufferManager::destroyResources() noexcept
+    {
+        if (!m_context)
+            return;
+
+        destroyUniformResources();
+
+        const VkDevice device = m_context->getDevice();
         if (m_indexBuffer)
         {
             vkDestroyBuffer(device, m_indexBuffer, nullptr);
@@ -135,6 +151,8 @@ namespace vkp
         }
     }
 
+    // 遍历物理设备内存类型：先匹配缓冲要求的类型位（typeFilter），再匹配访问属性；
+    // 常见属性组合：DEVICE_LOCAL（GPU 高速访问）、HOST_VISIBLE|HOST_COHERENT（CPU 可直接写入）
     uint32_t BufferManager::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const
     {
         for (uint32_t i = 0; i < m_memoryProperties.memoryTypeCount; ++i)
@@ -290,9 +308,10 @@ namespace vkp
                                 VK_BUFFER_USAGE_INDEX_BUFFER_BIT, m_indexBuffer, m_indexBufferMemory);
     }
 
-    void BufferManager::createUniformBuffers(VulkanContext& context)
+    // 每个交换链图像一个 UBO：多帧在飞时互不覆盖（HOST_VISIBLE + 持久映射，直接 memcpy 写入）
+    void BufferManager::createUniformBuffers(VulkanContext& context, SwapChain& swapChain)
     {
-        const uint32_t imageCount = m_swapChain->getImageCount();
+        const uint32_t imageCount = swapChain.getImageCount();
         constexpr VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
         m_uniformBuffers.resize(imageCount);
@@ -313,9 +332,9 @@ namespace vkp
         }
     }
 
-    void BufferManager::createDescriptorPool(VulkanContext& context)
+    void BufferManager::createDescriptorPool(VulkanContext& context, SwapChain& swapChain)
     {
-        const uint32_t imageCount = m_swapChain->getImageCount();
+        const uint32_t imageCount = swapChain.getImageCount();
 
         VkDescriptorPoolSize poolSize{};
         poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -333,9 +352,11 @@ namespace vkp
         }
     }
 
-    void BufferManager::createDescriptorSets(VulkanContext& context, RenderPassPipeline& pipeline)
+    // 每个交换链图像分配一套描述符集，各自指向对应的 UBO，与多帧在飞方案配合
+    void BufferManager::createDescriptorSets(VulkanContext& context, RenderPassPipeline& pipeline,
+                                             SwapChain& swapChain)
     {
-        const uint32_t imageCount = m_swapChain->getImageCount();
+        const uint32_t imageCount = swapChain.getImageCount();
         std::vector<VkDescriptorSetLayout> layouts(imageCount, pipeline.getDescriptorSetLayout());
 
         VkDescriptorSetAllocateInfo allocInfo{};
@@ -371,6 +392,10 @@ namespace vkp
 
     void BufferManager::updateUniformBuffer(uint32_t currentImage, const UniformBufferObject& ubo)
     {
+        if (currentImage >= m_uniformBuffersMapped.size())
+        {
+            throw std::out_of_range("Uniform buffer index out of range!");
+        }
         std::memcpy(m_uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
     }
 

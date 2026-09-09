@@ -35,8 +35,20 @@ namespace vkp
         }
 
     private:
-        void createSwapChain(VulkanContext& context, GLFWwindow* window);
-        void createImageViews(VulkanContext& context);
+        // 交换链创建结果先落在局部对象，全部成功后再一次性提交，
+        // 保证重建失败时不会破坏仍可用的旧交换链状态。
+        struct SwapChainResources
+        {
+            VkSwapchainKHR swapChain{ VK_NULL_HANDLE };
+            std::vector<VkImage> images;
+            std::vector<VkImageView> imageViews;
+            VkFormat imageFormat{ VK_FORMAT_UNDEFINED };
+            VkExtent2D extent{};
+        };
+
+        [[nodiscard]] SwapChainResources buildSwapChain(VulkanContext& context, GLFWwindow* window,
+                                                        VkSwapchainKHR oldSwapChain);
+        void commit(SwapChainResources&& resources);
 
         VulkanContext* m_context{ nullptr };
         VkSwapchainKHR m_swapChain{ VK_NULL_HANDLE };

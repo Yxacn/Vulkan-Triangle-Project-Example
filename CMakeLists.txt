@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.20)
 project(VkProject VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# 未指定构建类型时默认 Debug（保留调试符号与验证层，便于学习调试）；
+# 需要最大性能时用 -DCMAKE_BUILD_TYPE=Release 配置
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+endif()
+
 find_package(Vulkan REQUIRED)
 find_package(GLM REQUIRED)
 
@@ -60,6 +66,8 @@ else()
     # C++20 指定初始化器省略的字段按标准零初始化，
     target_compile_options(${PROJECT_NAME} PRIVATE -std=c++20 -Wall -Wextra -Wpedantic
                                                      -Wno-missing-field-initializers)
+    # 静态链接运行库：摆脱对 MSYS2 DLL 的依赖，生成的 exe 可直接双击运行
+    target_link_options(${PROJECT_NAME} PRIVATE -static)
 endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE

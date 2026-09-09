@@ -22,8 +22,6 @@ namespace vkp
 
         [[nodiscard]] const std::vector<VkFramebuffer>& getFramebuffers() const { return m_swapChainFramebuffers; }
 
-        void recreateFramebuffers(VulkanContext& context, SwapChain& swapChain, VkRenderPass renderPass);
-
     private:
         void destroyFramebuffers(VulkanContext& context) noexcept;
         void createFramebuffers(VulkanContext& context, SwapChain& swapChain, VkRenderPass renderPass);

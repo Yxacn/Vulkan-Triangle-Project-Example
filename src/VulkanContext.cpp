@@ -8,6 +8,8 @@
 #include <string_view>
 #include <vector>
 
+#include "VkCheck.hpp"
+
 namespace
 {
 #ifdef NDEBUG
@@ -68,6 +70,7 @@ namespace vkp
         destroyResources();
     }
 
+    // 与创建顺序相反销毁：surface/messenger 是 instance 的子对象，必须先于 instance 销毁
     void VulkanContext::destroyResources() noexcept
     {
         if (m_device)
@@ -95,22 +98,28 @@ namespace vkp
         }
     }
 
-    // 合并调用方配置与 GLFW 必需的实例扩展
+    // 合并调用方配置与 GLFW 必需的实例扩展。
+    // Debug 构建默认启用验证层，但 SDK 未安装时自动降级为无验证层运行（仅打印警告），
+    // 保证学习项目在任何机器上都能启动
     void VulkanContext::createInstance(const VkApplicationInfo& appInfo, const VkInstanceCreateInfo& instanceCreateInfo)
     {
-        if (kEnableValidationLayers)
+        m_validationEnabled = kEnableValidationLayers;
+        if (m_validationEnabled)
         {
             uint32_t layerCount = 0;
-            vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+            checkVk(vkEnumerateInstanceLayerProperties(&layerCount, nullptr), "Failed to query validation layers!");
             std::vector<VkLayerProperties> availableLayers(layerCount);
-            vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+            checkVk(vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data()),
+                    "Failed to query validation layers!");
 
             const bool allLayersAvailable =
                 std::ranges::all_of(kValidationLayers, [&availableLayers](const char* layerName)
                                     { return hasLayer(availableLayers, layerName); });
             if (!allLayersAvailable)
             {
-                throw std::runtime_error("Validation layer not available!");
+                std::cerr << "Warning: validation layer not available, running without it "
+                             "(install the Vulkan SDK to enable validation).\n";
+                m_validationEnabled = false;
             }
         }
 
@@ -127,54 +136,94 @@ namespace vkp
             throw std::runtime_error("Failed to get required GLFW extensions!");
         }
 
-        std::vector<const char*> extensions;
-        extensions.reserve(glfwExtensionCount + (kEnableValidationLayers ? 1u : 0u));
-        extensions.assign(glfwExtensions, glfwExtensions + glfwExtensionCount);
-        if (kEnableValidationLayers)
-        {
-            extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-        }
+        // 调用方的扩展/层先保存，降级重试时会重新合并，保证两次尝试的列表一致
+        const uint32_t callerExtensionCount = createInfo.enabledExtensionCount;
+        const char* const* callerExtensions = createInfo.ppEnabledExtensionNames;
+        const uint32_t callerLayerCount = createInfo.enabledLayerCount;
+        const char* const* callerLayers = createInfo.ppEnabledLayerNames;
 
-        createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-        createInfo.ppEnabledExtensionNames = extensions.data();
-
-        VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
-        if (kEnableValidationLayers)
+        for (;;)
         {
-            createInfo.enabledLayerCount = static_cast<uint32_t>(kValidationLayers.size());
-            createInfo.ppEnabledLayerNames = kValidationLayers.data();
+            // 合并调用方自定义扩展、GLFW 平台必需扩展与（验证启用时的）调试扩展。
+            // 直接覆盖 ppEnabledExtensionNames 会静默丢弃调用方传入的扩展，因此先收集再赋值
+            std::vector<const char*> extensions;
+            extensions.reserve(callerExtensionCount + glfwExtensionCount + (m_validationEnabled ? 1u : 0u));
+            if (callerExtensions != nullptr)
+            {
+                extensions.insert(extensions.end(), callerExtensions, callerExtensions + callerExtensionCount);
+            }
+            extensions.insert(extensions.end(), glfwExtensions, glfwExtensions + glfwExtensionCount);
+            if (m_validationEnabled)
+            {
+                extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+            }
+            // 去重：同一扩展重复出现会触发验证层告警
+            std::ranges::sort(extensions);
+            const auto [uniqueBegin, uniqueEnd] = std::ranges::unique(extensions);
+            extensions.erase(uniqueBegin, uniqueEnd);
 
-            debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-            debugCreateInfo.messageSeverity =
-                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-            debugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                                          VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                                          VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-            debugCreateInfo.pfnUserCallback = debugCallback;
-            createInfo.pNext = &debugCreateInfo;
-        }
-        else
-        {
-            createInfo.enabledLayerCount = 0;
-            createInfo.ppEnabledLayerNames = nullptr;
-            createInfo.pNext = nullptr;
-        }
+            createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+            createInfo.ppEnabledExtensionNames = extensions.data();
 
-        if (vkCreateInstance(&createInfo, nullptr, &m_instance) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to create Vulkan instance!");
+            // 合并调用方层与（验证启用时的）验证层
+            std::vector<const char*> layers;
+            layers.reserve(callerLayerCount + (m_validationEnabled ? kValidationLayers.size() : 0u));
+            if (callerLayers != nullptr)
+            {
+                layers.insert(layers.end(), callerLayers, callerLayers + callerLayerCount);
+            }
+            if (m_validationEnabled)
+            {
+                layers.insert(layers.end(), kValidationLayers.begin(), kValidationLayers.end());
+            }
+            std::ranges::sort(layers);
+            const auto [uniqueLayerBegin, uniqueLayerEnd] = std::ranges::unique(layers);
+            layers.erase(uniqueLayerBegin, uniqueLayerEnd);
+            createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
+            createInfo.ppEnabledLayerNames = layers.data();
+
+            // 调试回调随实例创建（pNext 链保留调用方原有链）；每次循环重置，避免引用上轮局部变量
+            createInfo.pNext = instanceCreateInfo.pNext;
+            VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
+            if (m_validationEnabled)
+            {
+                debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+                debugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                                                  VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+                debugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                                              VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                                              VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+                debugCreateInfo.pfnUserCallback = debugCallback;
+                debugCreateInfo.pNext = createInfo.pNext;
+                createInfo.pNext = &debugCreateInfo;
+            }
+
+            const VkResult result = vkCreateInstance(&createInfo, nullptr, &m_instance);
+            if (result == VK_SUCCESS)
+            {
+                break;
+            }
+            if (result == VK_ERROR_LAYER_NOT_PRESENT && m_validationEnabled)
+            {
+                // 验证层已注册但 DLL 加载失败（如残留清单、未装 SDK）：去掉验证层降级重试
+                std::cerr << "Warning: validation layer failed to load, retrying without it.\n";
+                m_validationEnabled = false;
+                continue;
+            }
+            throw std::runtime_error("Failed to create Vulkan instance! (VkResult " +
+                                     std::to_string(static_cast<int>(result)) + ")");
         }
     }
 
     void VulkanContext::setupDebugMessenger()
     {
-        if (!kEnableValidationLayers)
+        if (!m_validationEnabled)
             return;
 
         VkDebugUtilsMessengerCreateInfoEXT createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        createInfo.messageSeverity =
-            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                                     VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                                  VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                                  VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
@@ -182,35 +231,36 @@ namespace vkp
 
         const auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
             vkGetInstanceProcAddr(m_instance, "vkCreateDebugUtilsMessengerEXT"));
-        if (!func || func(m_instance, &createInfo, nullptr, &m_debugMessenger) != VK_SUCCESS)
+        if (!func)
         {
-            throw std::runtime_error("Failed to set up debug messenger!");
+            throw std::runtime_error("vkCreateDebugUtilsMessengerEXT is not available!");
         }
+        checkVk(func(m_instance, &createInfo, nullptr, &m_debugMessenger), "Failed to set up debug messenger!");
     }
 
     void VulkanContext::createSurface(GLFWwindow* window)
     {
-        if (glfwCreateWindowSurface(m_instance, window, nullptr, &m_surface) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to create window surface!");
-        }
+        checkVk(glfwCreateWindowSurface(m_instance, window, nullptr, &m_surface), "Failed to create window surface!");
     }
 
     // 选择首个满足扩展、队列族与交换链要求的物理设备
     void VulkanContext::pickPhysicalDevice()
     {
         uint32_t deviceCount = 0;
-        vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
+        checkVk(vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr), "Failed to enumerate physical devices!");
         if (deviceCount == 0)
         {
             throw std::runtime_error("No Vulkan-supported GPU found!");
         }
 
         std::vector<VkPhysicalDevice> devices(deviceCount);
-        vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
+        checkVk(vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data()),
+                "Failed to enumerate physical devices!");
 
-        const auto device =
-            std::ranges::find_if(devices, [this](VkPhysicalDevice candidate) { return isDeviceSuitable(candidate); });
+        // 简单策略：取第一个满足全部条件的设备（集显/独显混用时按枚举顺序）；
+        // 若需优先独立显卡，可在此处为候选设备评分排序
+        const auto device = std::ranges::find_if(devices, [this](VkPhysicalDevice candidate)
+                                                 { return isDeviceSuitable(candidate); });
         if (device == devices.end())
         {
             throw std::runtime_error("Failed to find a suitable GPU!");
@@ -252,7 +302,8 @@ namespace vkp
             if (!indices.presentFamily.has_value())
             {
                 VkBool32 presentSupport = VK_FALSE;
-                vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface, &presentSupport);
+                checkVk(vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface, &presentSupport),
+                        "Failed to query surface support!");
                 if (presentSupport)
                 {
                     indices.presentFamily = i;
@@ -267,23 +318,28 @@ namespace vkp
     VulkanContext::SwapChainSupportDetails VulkanContext::querySwapChainSupport(VkPhysicalDevice device) const
     {
         SwapChainSupportDetails details;
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_surface, &details.capabilities);
+        checkVk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_surface, &details.capabilities),
+                "Failed to query surface capabilities!");
 
         uint32_t formatCount = 0;
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_surface, &formatCount, nullptr);
+        checkVk(vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_surface, &formatCount, nullptr),
+                "Failed to query surface formats!");
         if (formatCount != 0)
         {
             details.formats.resize(formatCount);
-            vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_surface, &formatCount, details.formats.data());
+            checkVk(vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_surface, &formatCount, details.formats.data()),
+                    "Failed to query surface formats!");
         }
 
         uint32_t presentModeCount = 0;
-        vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_surface, &presentModeCount, nullptr);
+        checkVk(vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_surface, &presentModeCount, nullptr),
+                "Failed to query present modes!");
         if (presentModeCount != 0)
         {
             details.presentModes.resize(presentModeCount);
-            vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_surface, &presentModeCount,
-                                                      details.presentModes.data());
+            checkVk(vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_surface, &presentModeCount,
+                                                              details.presentModes.data()),
+                    "Failed to query present modes!");
         }
         return details;
     }
@@ -291,9 +347,11 @@ namespace vkp
     bool VulkanContext::checkDeviceExtensionSupport(VkPhysicalDevice device) const
     {
         uint32_t extensionCount = 0;
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+        checkVk(vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr),
+                "Failed to enumerate device extensions!");
         std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+        checkVk(vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data()),
+                "Failed to enumerate device extensions!");
 
         return std::ranges::all_of(kDeviceExtensions, [&availableExtensions](const char* requiredExtension)
                                    { return hasExtension(availableExtensions, requiredExtension); });
@@ -332,10 +390,7 @@ namespace vkp
         createInfo.ppEnabledExtensionNames = kDeviceExtensions.data();
         createInfo.pEnabledFeatures = &deviceFeatures;
 
-        if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to create logical device!");
-        }
+        checkVk(vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device), "Failed to create logical device!");
 
         vkGetDeviceQueue(m_device, graphicsFamily, 0, &m_graphicsQueue);
         vkGetDeviceQueue(m_device, presentFamily, 0, &m_presentQueue);

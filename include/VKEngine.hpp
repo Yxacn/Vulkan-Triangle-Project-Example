@@ -32,8 +32,11 @@ namespace vkp
         void waitIdle();
 
     private:
+        // 常驻资源（交换链/命令池/几何缓冲）：整个引擎生命周期只创建一次
         void createRenderingResources();
-        void destroyRenderingResources() noexcept;
+        // 帧资源（管线/帧缓冲/UBO/命令录制/同步对象）：依赖交换链，交换链重建时整体重建
+        void createFrameResources();
+        void destroyFrameResources() noexcept;
         void recreateSwapChain();
         void updateUniformBuffers();
 

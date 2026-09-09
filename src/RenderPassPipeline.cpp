@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -56,10 +57,15 @@ namespace
                 throw std::runtime_error("Invalid SPIR-V code!");
             }
 
+            // char 缓冲只保证 1 字节对齐，reinterpret_cast 成 uint32_t 指针读取属于未定义行为；
+            // 先按字拷贝到对齐的 uint32_t 容器再交给 Vulkan
+            m_code.resize(code.size() / sizeof(uint32_t));
+            std::memcpy(m_code.data(), code.data(), code.size());
+
             VkShaderModuleCreateInfo createInfo{};
             createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-            createInfo.codeSize = code.size();
-            createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+            createInfo.codeSize = m_code.size() * sizeof(uint32_t);
+            createInfo.pCode = m_code.data();
 
             if (vkCreateShaderModule(m_device, &createInfo, nullptr, &m_module) != VK_SUCCESS)
             {
@@ -83,13 +89,15 @@ namespace
     private:
         VkDevice m_device{ VK_NULL_HANDLE };
         VkShaderModule m_module{ VK_NULL_HANDLE };
+        std::vector<uint32_t> m_code; // 持有转换后的 SPIR-V 代码，保证 pCode 在模块存活期间有效
     };
 } // namespace
 
 namespace vkp
 {
-    RenderPassPipeline::RenderPassPipeline(VulkanContext& context, SwapChain& swapChain)
+    RenderPassPipeline::RenderPassPipeline(VulkanContext& context, SwapChain& swapChain, const PipelineConfig& config)
         : m_context(&context)
+        , m_config(config)
     {
         try
         {
@@ -137,6 +145,8 @@ namespace vkp
         }
     }
 
+    // 单附件渲染通道：颜色附件从 UNDEFINED 清屏后写入，最终转为适合呈现的布局。
+    // subpass 依赖保证外部(呈现队列)到本 subpass 的颜色写入按序执行
     void RenderPassPipeline::createRenderPass(VulkanContext& context, SwapChain& swapChain)
     {
         VkAttachmentDescription colorAttachment{};
@@ -181,6 +191,7 @@ namespace vkp
         }
     }
 
+    // binding 0 = UBO，与 shader.vert 中 layout(binding = 0) 一一对应
     void RenderPassPipeline::createDescriptorSetLayout(VulkanContext& context)
     {
         VkDescriptorSetLayoutBinding uboLayoutBinding{};
@@ -204,8 +215,9 @@ namespace vkp
 
     void RenderPassPipeline::createGraphicsPipeline(VulkanContext& context, SwapChain& swapChain)
     {
-        const auto vertShaderCode = readFile(SHADER_DIR "vert.spv");
-        const auto fragShaderCode = readFile(SHADER_DIR "frag.spv");
+        // SHADER_DIR 由 CMake 注入（末尾带分隔符），着色器文件名来自 PipelineConfig
+        const auto vertShaderCode = readFile(std::string(SHADER_DIR) + m_config.vertexShader);
+        const auto fragShaderCode = readFile(std::string(SHADER_DIR) + m_config.fragmentShader);
         const ShaderModule vertShaderModule(context.getDevice(), vertShaderCode);
         const ShaderModule fragShaderModule(context.getDevice(), fragShaderCode);
 
@@ -245,7 +257,7 @@ namespace vkp
 
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-            .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+            .topology = m_config.topology,
             .primitiveRestartEnable = VK_FALSE,
         };
 
@@ -270,23 +282,31 @@ namespace vkp
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .depthClampEnable = VK_FALSE,
             .rasterizerDiscardEnable = VK_FALSE,
-            .polygonMode = VK_POLYGON_MODE_FILL,
-            .cullMode = VK_CULL_MODE_NONE,
-            .frontFace = VK_FRONT_FACE_CLOCKWISE,
+            .polygonMode = m_config.polygonMode,
+            .cullMode = m_config.cullMode,
+            .frontFace = m_config.frontFace,
             .depthBiasEnable = VK_FALSE,
-            .lineWidth = 1.0f,
+            .lineWidth = m_config.lineWidth,
         };
 
+        // 注意：启用多重采样时渲染通道还需提供解析附件，本示例的渲染通道固定单采样，
+        // 因此 samples 保持 VK_SAMPLE_COUNT_1_BIT 才能与渲染通道匹配
         VkPipelineMultisampleStateCreateInfo multisampling{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-            .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+            .rasterizationSamples = m_config.samples,
             .sampleShadingEnable = VK_FALSE,
         };
 
+        // 标准 alpha 混合系数；blendEnable 为 VK_FALSE 时以下混合字段不起作用
         VkPipelineColorBlendAttachmentState colorBlendAttachment{
-            .blendEnable = VK_FALSE,
-            .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
-                              VK_COLOR_COMPONENT_A_BIT,
+            .blendEnable = m_config.blendEnable,
+            .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+            .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+            .colorBlendOp = VK_BLEND_OP_ADD,
+            .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+            .alphaBlendOp = VK_BLEND_OP_ADD,
+            .colorWriteMask = m_config.colorWriteMask,
         };
         VkPipelineColorBlendStateCreateInfo colorBlending{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,

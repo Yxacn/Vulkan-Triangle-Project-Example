@@ -62,7 +62,7 @@ cd <project-directory>
 ### 2.使用 CMake 构建
 ```
 mkdir build && cd build
-cmake ..
+cmake ..   # 默认 Debug（启用验证层）；高性能构建改用 -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 ```
 
@@ -73,7 +73,7 @@ cmake --build .
 
 ## 注意事项
 ### 验证层：
-在 Debug 模式下默认启用（NDEBUG 未定义）。若 Vulkan SDK 未安装验证层，程序将抛出异常。可在 Release 模式下禁用。
+在 Debug 模式下默认启用（NDEBUG 未定义）。若未安装 Vulkan SDK 验证层，程序会打印警告并自动降级为无验证层运行，不影响学习与演示。
 
 ### 着色器路径：
 构建系统通过 CMake 注入 SHADER_DIR（指向构建目录下的 shaders/），代码中亦保留 "shaders/" 作为回退路径。

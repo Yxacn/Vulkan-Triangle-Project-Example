@@ -34,6 +34,7 @@ namespace vkp
         void createWindow();
         [[nodiscard]] GLFWwindow* getWindowInstance() const;
         [[nodiscard]] bool shouldClose() const;
+        [[nodiscard]] bool isMinimized() const; // 最小化时帧缓冲尺寸为 0，调用方据此跳过绘制
 
     private:
         void initWindow();

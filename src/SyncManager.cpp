@@ -1,15 +1,18 @@
 // SyncManager.cpp
 #include "SyncManager.hpp"
 
+#include <algorithm>
 #include <stdexcept>
 
 #include "VulkanContext.hpp"
 
 namespace vkp
 {
-    SyncManager::SyncManager(VulkanContext& context, uint32_t imageCount)
+    SyncManager::SyncManager(VulkanContext& context, uint32_t imageCount, uint32_t frameCount)
         : m_context(&context)
+        , m_frameCount(std::clamp(frameCount, 1u, MAX_FRAMES_IN_FLIGHT))
     {
+        // frameCount 做防御性钳制：为 0 会导致取模除零/索引失效，超出数组容量会越界
         createSyncObjects(context, imageCount);
     }
 
@@ -53,8 +56,10 @@ namespace vkp
         m_context = nullptr;
     }
 
-    // imageAvailable 与帧围栏各 MAX_FRAMES_IN_FLIGHT 个，限制 CPU 最多提前两帧；
+    // imageAvailable 与帧围栏按“在飞帧数”创建，限制 CPU 最多提前 m_frameCount 帧；
     // renderFinished 按交换链图像数量分配，与 imageIndex 一一对应。
+    // 在飞帧数不超过交换链图像数（见 VKEngine::createFrameResources），
+    // 避免为永远无法并行使用的帧创建多余的同步对象。
     void SyncManager::createSyncObjects(VulkanContext& context, uint32_t imageCount)
     {
         m_imagesInFlight.assign(imageCount, VK_NULL_HANDLE);
@@ -64,7 +69,7 @@ namespace vkp
         const VkFenceCreateInfo fenceInfo{ .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
                                            .flags = VK_FENCE_CREATE_SIGNALED_BIT };
 
-        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+        for (uint32_t i = 0; i < m_frameCount; ++i)
         {
             if (vkCreateSemaphore(context.getDevice(), &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]) !=
                     VK_SUCCESS ||

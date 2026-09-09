@@ -52,6 +52,12 @@ namespace vkp
 
     void GLWindow::initWindow()
     {
+        // 尺寸非法直接拒绝，避免 glfwCreateWindow 失败后错误信息不明确
+        if (m_windowInfo.width <= 0 || m_windowInfo.height <= 0)
+        {
+            throw std::invalid_argument("Window dimensions must be positive!");
+        }
+
         if (sm_glfwRefCount++ == 0 && !glfwInit())
         {
             --sm_glfwRefCount;
@@ -86,6 +92,12 @@ namespace vkp
     [[nodiscard]] bool GLWindow::shouldClose() const
     {
         return m_window != nullptr && glfwWindowShouldClose(m_window);
+    }
+
+    [[nodiscard]] bool GLWindow::isMinimized() const
+    {
+        // 最小化时帧缓冲尺寸为 0，获取交换链图像必然失败，调用方应跳过绘制
+        return m_window != nullptr && glfwGetWindowAttrib(m_window, GLFW_ICONIFIED) == GLFW_TRUE;
     }
 
     void GLWindow::centerWindow()
