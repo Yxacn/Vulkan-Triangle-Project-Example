@@ -147,11 +147,10 @@ namespace vkp
 
         VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
-        // 顶点输入（假设顶点结构有 position 和 color）
-        // 顶点输入（使用 sizeof(Vertex)）
+        // 顶点输入
         VkVertexInputBindingDescription bindingDescription{};
         bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex); // 替代 sizeof(float)*6
+        bindingDescription.stride = sizeof(Vertex);
         bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
         std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};

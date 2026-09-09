@@ -34,6 +34,7 @@ namespace vkp
 
     private:
         void recreateSwapChain();
+        void updateUniformBuffers();
 
         GLFWwindow* m_window;
 

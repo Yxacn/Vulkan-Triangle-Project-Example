@@ -12,16 +12,16 @@ namespace vkp
     class VulkanContext;
     class SwapChain;
     class RenderPassPipeline;
-    class CommandManager; // 前向声明
+    class CommandManager;
 
-    // 顶点结构
+    // 顶点数据
     struct Vertex
     {
         glm::vec3 pos;
         glm::vec3 color;
     };
 
-    // 管理顶点缓冲、索引缓冲、Uniform 缓冲及描述符集
+    // 缓冲和描述符集
     class BufferManager
     {
     public:
@@ -32,11 +32,11 @@ namespace vkp
         BufferManager(const BufferManager&) = delete;
         BufferManager& operator=(const BufferManager&) = delete;
 
-        // 更新 Uniform 缓冲
+        // 更新 Uniform
         void updateUniformBuffer(uint32_t currentImage, const glm::mat4& model, const glm::mat4& view,
                                  const glm::mat4& proj);
 
-        // 绑定缓冲和描述符集（用于命令录制）
+        // 绑定缓冲和描述符集
         void bindBuffers(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, uint32_t currentImage) const;
 
     private:
@@ -66,7 +66,7 @@ namespace vkp
         VkDescriptorPool m_descriptorPool;
         std::vector<VkDescriptorSet> m_descriptorSets;
 
-        // 示例数据
+        // 顶点数据
         const std::vector<Vertex> m_vertices = { { { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
                                                  { { 0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
                                                  { { 0.0f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } } };

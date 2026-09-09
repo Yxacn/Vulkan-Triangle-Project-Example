@@ -29,7 +29,6 @@ namespace vkp
         const std::vector<VkImageView>& getImageViews() const { return m_swapChainImageViews; }
         uint32_t getImageCount() const { return static_cast<uint32_t>(m_swapChainImages.size()); }
 
-        // 现在 VulkanContext 已完整，可安全调用 getDevice()
         VkResult acquireNextImage(VkSemaphore semaphore, uint32_t& imageIndex)
         {
             return vkAcquireNextImageKHR(m_context->getDevice(), m_swapChain, UINT64_MAX, semaphore, VK_NULL_HANDLE,

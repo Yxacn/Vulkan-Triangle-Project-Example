@@ -11,13 +11,10 @@
 namespace vkp
 {
 
-    CommandManager::CommandManager(VulkanContext& context, SwapChain& swapChain, RenderPassPipeline& pipeline,
-                                   FrameBufferManager& framebufferManager)
+    CommandManager::CommandManager(VulkanContext& context)
         : m_context(&context)
     {
         createCommandPool(context);
-        createCommandBuffers(context);
-        // 命令缓冲录制延迟到 BufferManager 创建后
     }
 
     CommandManager::~CommandManager()
@@ -43,12 +40,6 @@ namespace vkp
         }
     }
 
-    void CommandManager::createCommandBuffers(VulkanContext& context)
-    {
-        // 先分配命令缓冲，数量与交换链图像数相同，但我们在 record 时才会分配具体数量，这里先预留
-        // 为了简化，我们推迟分配，在 recordCommandBuffers 中分配。
-    }
-
     void CommandManager::recordCommandBuffers(VulkanContext& context, SwapChain& swapChain,
                                               RenderPassPipeline& pipeline, FrameBufferManager& framebufferManager,
                                               BufferManager& bufferManager)
@@ -72,7 +63,6 @@ namespace vkp
         {
             VkCommandBufferBeginInfo beginInfo{};
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
 
             if (vkBeginCommandBuffer(m_commandBuffers[i], &beginInfo) != VK_SUCCESS)
             {
@@ -94,7 +84,6 @@ namespace vkp
 
             vkCmdBindPipeline(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.getGraphicsPipeline());
 
-            // 绑定顶点/索引缓冲和描述符集
             bufferManager.bindBuffers(m_commandBuffers[i], pipeline.getPipelineLayout(), static_cast<uint32_t>(i));
 
             vkCmdDrawIndexed(m_commandBuffers[i], 3, 1, 0, 0, 0);

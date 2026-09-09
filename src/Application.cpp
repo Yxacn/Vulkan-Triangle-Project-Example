@@ -10,23 +10,17 @@ namespace vkp
         : m_glw(window_info)
         , m_vke(m_glw.getWindowInstance(), app_info, instance_create_info)
     {
-        // 初始化顺序依赖：引擎需要窗口句柄，故此处m_glw在初始化列表中排在m_vke之后，
-        // 但实际构造顺序按声明顺序（先m_glw后m_vke），因此需确保在构造函数体内不依赖未构造的对象。
-        // 这里将m_glw放在前面声明，但初始化列表顺序不影响构造顺序，因此m_glw先构造，再构造m_vke。
-        // 为避免歧义，实际声明顺序为 m_glw, m_vke，因此构造顺序就是m_glw先，m_vke后。
-        // 但m_vke的构造参数需要m_glw.getWindowInstance()，此时m_glw已构造完成，所以安全。
     }
 
     Application::~Application()
     {
-        // 资源由成员析构自动释放
     }
 
     Application::Application(Application&& other) noexcept
         : m_glw(std::move(other.m_glw))
         , m_vke(std::move(other.m_vke))
     {
-        // 移动构造，转移成员所有权
+        // 移动构造
     }
 
     Application& Application::operator=(Application&& other) noexcept
@@ -41,11 +35,11 @@ namespace vkp
 
     void Application::run()
     {
-        // 主循环：等待事件并渲染
+        // 主循环
         while (!glfwWindowShouldClose(m_glw.getWindowInstance()))
         {
-            glfwWaitEvents();  // 等待事件（减少CPU占用）
-            m_vke.drawFrame(); // 绘制一帧
+            glfwWaitEvents();
+            m_vke.drawFrame();
         }
     }
 } // namespace vkp

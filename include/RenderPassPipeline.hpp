@@ -8,7 +8,7 @@ namespace vkp
     class VulkanContext;
     class SwapChain;
 
-    // 管理渲染通道、管线布局、图形管线、描述符集布局
+    // 管理渲染通道、图形管线和描述符集布局
     class RenderPassPipeline
     {
     public:
@@ -28,7 +28,7 @@ namespace vkp
         void createDescriptorSetLayout(VulkanContext& context);
         void createGraphicsPipeline(VulkanContext& context, SwapChain& swapChain);
 
-        VulkanContext* m_context; // 保存引用
+        VulkanContext* m_context;
         VkRenderPass m_renderPass;
         VkPipelineLayout m_pipelineLayout;
         VkPipeline m_graphicsPipeline;

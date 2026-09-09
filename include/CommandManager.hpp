@@ -13,18 +13,15 @@ namespace vkp
     class FrameBufferManager;
     class BufferManager;
 
-    // 管理命令池和命令缓冲
     class CommandManager
     {
     public:
-        CommandManager(VulkanContext& context, SwapChain& swapChain, RenderPassPipeline& pipeline,
-                       FrameBufferManager& framebufferManager);
+        explicit CommandManager(VulkanContext& context);
         ~CommandManager();
 
         CommandManager(const CommandManager&) = delete;
         CommandManager& operator=(const CommandManager&) = delete;
 
-        // 录制命令缓冲（需要在 BufferManager 创建后调用）
         void recordCommandBuffers(VulkanContext& context, SwapChain& swapChain, RenderPassPipeline& pipeline,
                                   FrameBufferManager& framebufferManager, BufferManager& bufferManager);
 
@@ -33,7 +30,6 @@ namespace vkp
 
     private:
         void createCommandPool(VulkanContext& context);
-        void createCommandBuffers(VulkanContext& context);
 
         VulkanContext* m_context;
         VkCommandPool m_commandPool;

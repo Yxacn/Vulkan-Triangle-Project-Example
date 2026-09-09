@@ -248,7 +248,6 @@ namespace vkp
     void BufferManager::updateUniformBuffer(uint32_t currentImage, const glm::mat4& model, const glm::mat4& view,
                                             const glm::mat4& proj)
     {
-        // 将三个矩阵连续写入映射内存
         void* data = m_uniformBuffersMapped[currentImage];
         memcpy(data, &model, sizeof(glm::mat4));
         memcpy(static_cast<char*>(data) + sizeof(glm::mat4), &view, sizeof(glm::mat4));

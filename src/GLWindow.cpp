@@ -36,13 +36,10 @@ namespace vkp
     {
         if (this != &other)
         {
-            // 1. 释放当前对象资源
             destroyWindow();
-            // 2. 转移资源
             m_w_info = std::move(other.m_w_info);
             m_window = other.m_window;
 
-            // 3. 清空源对象
             other.m_window = nullptr;
         }
         return *this;
@@ -52,8 +49,8 @@ namespace vkp
     {
         if (sm_glfwRefCount++ == 0)
         {
-            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // 防止glfw产生opengl相关文件 (glfw是为opengl两针打造)
-            glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);   // 禁止自定义调整窗口大小
+            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // 无 OpenGL
+            glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);   // 禁止调整大小
 
             if (!glfwInit())
             {

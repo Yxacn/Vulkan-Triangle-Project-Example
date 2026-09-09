@@ -32,9 +32,7 @@ namespace vkp
 
     void SyncManager::createSyncObjects(VulkanContext& context, uint32_t imageCount)
     {
-        m_imageAvailableSemaphores.resize(imageCount);
-        m_renderFinishedSemaphores.resize(imageCount);
-        m_inFlightFences.resize(imageCount);
+        m_imagesInFlight.assign(imageCount, VK_NULL_HANDLE);
 
         VkSemaphoreCreateInfo semaphoreInfo{};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -43,13 +41,21 @@ namespace vkp
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-        for (uint32_t i = 0; i < imageCount; i++)
+        m_renderFinishedSemaphores.resize(imageCount);
+
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
         {
             if (vkCreateSemaphore(context.getDevice(), &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]) !=
                     VK_SUCCESS ||
-                vkCreateSemaphore(context.getDevice(), &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]) !=
-                    VK_SUCCESS ||
                 vkCreateFence(context.getDevice(), &fenceInfo, nullptr, &m_inFlightFences[i]) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Failed to create synchronization objects!");
+            }
+        }
+
+        for (auto& semaphore : m_renderFinishedSemaphores)
+        {
+            if (vkCreateSemaphore(context.getDevice(), &semaphoreInfo, nullptr, &semaphore) != VK_SUCCESS)
             {
                 throw std::runtime_error("Failed to create synchronization objects!");
             }

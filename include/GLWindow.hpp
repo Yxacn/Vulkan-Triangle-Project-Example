@@ -10,7 +10,7 @@ struct GLFWwindow;
 
 namespace vkp
 {
-    /* 默认窗口参数 */
+    // 默认窗口参数
     constexpr inline int DEFAULT_WINDOW_WIDTH = 800;
     constexpr inline int DEFAULT_WINDOW_HEIGHT = 600;
     constexpr inline const char* DEFAULT_WINDOW_TITLE = "Vulkan";
@@ -28,7 +28,7 @@ namespace vkp
     public:
         explicit GLWindow(const WindowInfo& window_info = { DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
                                                             DEFAULT_WINDOW_TITLE });
-        ~GLWindow(); // 析构
+        ~GLWindow();
 
         GLWindow(GLWindow&& other) noexcept;
         GLWindow& operator=(GLWindow&& other) noexcept;

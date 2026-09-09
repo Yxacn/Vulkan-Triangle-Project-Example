@@ -6,7 +6,7 @@
 
 namespace vkp
 {
-    // 默认Vulkan应用信息
+    // 默认 Vulkan 应用信息
     inline constexpr VkApplicationInfo defaultVkappInfo{
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pApplicationName = "VkProject",
@@ -15,7 +15,7 @@ namespace vkp
         .engineVersion = VK_MAKE_VERSION(1, 0, 0),
         .apiVersion = VK_API_VERSION_1_3,
     };
-    // 默认实例创建信息
+    // 默认实例信息
     inline constexpr VkInstanceCreateInfo defaultVkInstanceCreateInfo{
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo = &defaultVkappInfo,
@@ -24,11 +24,11 @@ namespace vkp
         .enabledExtensionCount = 0,
         .ppEnabledExtensionNames = nullptr,
     };
-    // 应用程序主类，组合窗口和渲染引擎
+    // 应用主类
     class Application
     {
     public:
-        // 构造函数，可传入窗口参数、Vulkan应用信息和实例创建信息
+        // 构造
         explicit Application(const WindowInfo& window_info = { DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
                                                                DEFAULT_WINDOW_TITLE },
                              const VkApplicationInfo& app_info = defaultVkappInfo,
@@ -44,7 +44,7 @@ namespace vkp
         Application(const Application&) = delete;
         Application& operator=(const Application&) = delete;
 
-        // 主循环：处理事件并渲染每一帧
+        // 主循环
         void run();
 
     private:

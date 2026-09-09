@@ -3,12 +3,12 @@
 #include <iostream>
 #include <set>
 
-#include <GLFW/glfw3.h> // 确保包含 glfwCreateWindowSurface
+#include <GLFW/glfw3.h>
 
 namespace vkp
 {
 
-    // 调试回调函数
+    // 调试回调
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                                                         VkDebugUtilsMessageTypeFlagsEXT messageType,
                                                         const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
@@ -30,7 +30,6 @@ namespace vkp
 
     VulkanContext::~VulkanContext()
     {
-        // 按逆序释放资源
         if (m_device)
         {
             vkDestroyDevice(m_device, nullptr);
@@ -52,12 +51,11 @@ namespace vkp
         }
     }
 
-    // 创建 Vulkan 实例（使用传入的 appInfo 和 instanceCreateInfo）
+    // 创建 Vulkan 实例
     void VulkanContext::createInstance(const VkApplicationInfo& appInfo, const VkInstanceCreateInfo& instanceCreateInfo)
     {
         if (m_enableValidationLayers)
         {
-            // 检查验证层可用性
             uint32_t layerCount;
             vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
             std::vector<VkLayerProperties> availableLayers(layerCount);
@@ -81,15 +79,12 @@ namespace vkp
             }
         }
 
-        // 复制传入的 instanceCreateInfo，并合并我们自己的扩展
         VkInstanceCreateInfo createInfo = instanceCreateInfo;
-        // 如果调用者未设置 pApplicationInfo，使用我们自己的
         if (createInfo.pApplicationInfo == nullptr)
         {
             createInfo.pApplicationInfo = &appInfo;
         }
 
-        // 获取 GLFW 需要的扩展
         uint32_t glfwExtensionCount = 0;
         const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
         std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
@@ -194,7 +189,7 @@ namespace vkp
         }
     }
 
-    // 检查设备是否合适
+    // 检查设备
     bool VulkanContext::isDeviceSuitable(VkPhysicalDevice device)
     {
         QueueFamilyIndices indices = findQueueFamilies(device);
@@ -208,7 +203,7 @@ namespace vkp
         return indices.isComplete() && extensionsSupported && swapChainAdequate;
     }
 
-    // 查找队列族（public）
+    // 查找队列族
     VulkanContext::QueueFamilyIndices VulkanContext::findQueueFamilies(VkPhysicalDevice device)
     {
         QueueFamilyIndices indices;
@@ -235,7 +230,7 @@ namespace vkp
         return indices;
     }
 
-    // 查询交换链支持详情（public）
+    // 查询交换链支持
     VulkanContext::SwapChainSupportDetails VulkanContext::querySwapChainSupport(VkPhysicalDevice device)
     {
         SwapChainSupportDetails details;
@@ -258,7 +253,7 @@ namespace vkp
         return details;
     }
 
-    // 检查设备扩展支持
+    // 检查设备扩展
     bool VulkanContext::checkDeviceExtensionSupport(VkPhysicalDevice device)
     {
         uint32_t extensionCount;
@@ -304,7 +299,6 @@ namespace vkp
         createInfo.enabledExtensionCount = static_cast<uint32_t>(m_deviceExtensions.size());
         createInfo.ppEnabledExtensionNames = m_deviceExtensions.data();
 
-        // 关键修正：设备层已废弃，必须设置为 0
         createInfo.enabledLayerCount = 0;
         createInfo.ppEnabledLayerNames = nullptr;
 
