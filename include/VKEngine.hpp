@@ -1,3 +1,4 @@
+// VKEngine.hpp
 #pragma once
 
 #include <memory>
@@ -8,7 +9,6 @@
 namespace vkp
 {
 
-    // 前向声明
     class VulkanContext;
     class SwapChain;
     class RenderPassPipeline;
@@ -23,11 +23,9 @@ namespace vkp
         VKEngine(GLFWwindow* window, const VkApplicationInfo& appInfo, const VkInstanceCreateInfo& instanceCreateInfo);
         ~VKEngine();
 
-        // 禁止拷贝
         VKEngine(const VKEngine&) = delete;
         VKEngine& operator=(const VKEngine&) = delete;
 
-        // 声明移动操作（定义在 .cpp）
         VKEngine(VKEngine&& other) noexcept;
         VKEngine& operator=(VKEngine&& other) noexcept;
 
@@ -36,6 +34,8 @@ namespace vkp
 
     private:
         void recreateSwapChain();
+
+        GLFWwindow* m_window;
 
         std::unique_ptr<VulkanContext> m_context;
         std::unique_ptr<SwapChain> m_swapChain;

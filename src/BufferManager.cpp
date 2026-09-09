@@ -14,6 +14,7 @@ namespace vkp
     BufferManager::BufferManager(VulkanContext& context, SwapChain& swapChain, RenderPassPipeline& pipeline,
                                  CommandManager& cmdManager)
         : m_context(&context)
+        , m_swapChain(&swapChain)
     {
         createVertexBuffer(context, cmdManager);
         createIndexBuffer(context, cmdManager);
@@ -170,36 +171,101 @@ namespace vkp
 
     void BufferManager::createUniformBuffers(VulkanContext& context)
     {
-        // 假设有 MAX_FRAMES_IN_FLIGHT 个缓冲，这里简化为交换链图像数量
-        size_t imageCount = 1; // 占位，实际由 VKEngine 传递，但我们在构造函数中无法得知，所以稍后在 VKEngine 中更新
-        // 我们将在 VKEngine 中调用一个 resize 方法，但为了简单，我们在这里硬编码为 2
-        // 更好的方式：让 VKEngine 在创建 BufferManager 后调用 setImageCount
-        // 此处先设为 2，后续在 VKEngine 构造函数中通过重新创建或 resize 修正。
-        // 为简便，我们在 VKEngine 中重新设计，但这里我们假设外部会调用 resize。
-        // 临时：在构造函数中先创建空，外部再初始化。
-        // 我们将在 VKEngine 中处理。
+        uint32_t imageCount = m_swapChain->getImageCount();
+        VkDeviceSize bufferSize = sizeof(glm::mat4) * 3; // model, view, proj
+
+        m_uniformBuffers.resize(imageCount);
+        m_uniformBuffersMemory.resize(imageCount);
+        m_uniformBuffersMapped.resize(imageCount);
+
+        for (uint32_t i = 0; i < imageCount; i++)
+        {
+            createBuffer(context, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                         m_uniformBuffers[i], m_uniformBuffersMemory[i]);
+
+            vkMapMemory(context.getDevice(), m_uniformBuffersMemory[i], 0, bufferSize, 0, &m_uniformBuffersMapped[i]);
+        }
     }
 
     void BufferManager::createDescriptorPool(VulkanContext& context)
     {
-        // 类似，需要图像数量，暂不实现
+        uint32_t imageCount = m_swapChain->getImageCount();
+
+        VkDescriptorPoolSize poolSize{};
+        poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSize.descriptorCount = imageCount;
+
+        VkDescriptorPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.poolSizeCount = 1;
+        poolInfo.pPoolSizes = &poolSize;
+        poolInfo.maxSets = imageCount;
+
+        if (vkCreateDescriptorPool(context.getDevice(), &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to create descriptor pool!");
+        }
     }
 
     void BufferManager::createDescriptorSets(VulkanContext& context, RenderPassPipeline& pipeline)
     {
-        // 暂不实现
+        uint32_t imageCount = m_swapChain->getImageCount();
+        std::vector<VkDescriptorSetLayout> layouts(imageCount, pipeline.getDescriptorSetLayout());
+
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = m_descriptorPool;
+        allocInfo.descriptorSetCount = imageCount;
+        allocInfo.pSetLayouts = layouts.data();
+
+        m_descriptorSets.resize(imageCount);
+        if (vkAllocateDescriptorSets(context.getDevice(), &allocInfo, m_descriptorSets.data()) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to allocate descriptor sets!");
+        }
+
+        for (uint32_t i = 0; i < imageCount; i++)
+        {
+            VkDescriptorBufferInfo bufferInfo{};
+            bufferInfo.buffer = m_uniformBuffers[i];
+            bufferInfo.offset = 0;
+            bufferInfo.range = sizeof(glm::mat4) * 3;
+
+            VkWriteDescriptorSet descriptorWrite{};
+            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrite.dstSet = m_descriptorSets[i];
+            descriptorWrite.dstBinding = 0;
+            descriptorWrite.dstArrayElement = 0;
+            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptorWrite.descriptorCount = 1;
+            descriptorWrite.pBufferInfo = &bufferInfo;
+
+            vkUpdateDescriptorSets(context.getDevice(), 1, &descriptorWrite, 0, nullptr);
+        }
     }
 
     void BufferManager::updateUniformBuffer(uint32_t currentImage, const glm::mat4& model, const glm::mat4& view,
                                             const glm::mat4& proj)
     {
-        // 实现
+        // 将三个矩阵连续写入映射内存
+        void* data = m_uniformBuffersMapped[currentImage];
+        memcpy(data, &model, sizeof(glm::mat4));
+        memcpy(static_cast<char*>(data) + sizeof(glm::mat4), &view, sizeof(glm::mat4));
+        memcpy(static_cast<char*>(data) + 2 * sizeof(glm::mat4), &proj, sizeof(glm::mat4));
     }
 
     void BufferManager::bindBuffers(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout,
                                     uint32_t currentImage) const
     {
-        // 实现
+        VkBuffer vertexBuffers[] = { m_vertexBuffer };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
+        vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
+                                &m_descriptorSets[currentImage], 0, nullptr);
     }
 
 } // namespace vkp

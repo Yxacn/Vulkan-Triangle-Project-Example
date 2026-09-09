@@ -4,7 +4,7 @@
 #include <stdexcept>
 
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp> // 添加必要的 GLM 头文件
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "BufferManager.hpp"
 #include "CommandManager.hpp"
@@ -19,6 +19,7 @@ namespace vkp
 
     VKEngine::VKEngine(GLFWwindow* window, const VkApplicationInfo& appInfo,
                        const VkInstanceCreateInfo& instanceCreateInfo)
+        : m_window(window)
     {
         m_context = std::make_unique<VulkanContext>(window, appInfo, instanceCreateInfo);
         m_swapChain = std::make_unique<SwapChain>(*m_context, window);
@@ -39,9 +40,9 @@ namespace vkp
             m_context->waitIdle();
     }
 
-    // 移动构造函数
     VKEngine::VKEngine(VKEngine&& other) noexcept
-        : m_context(std::move(other.m_context))
+        : m_window(other.m_window)
+        , m_context(std::move(other.m_context))
         , m_swapChain(std::move(other.m_swapChain))
         , m_pipeline(std::move(other.m_pipeline))
         , m_framebufferManager(std::move(other.m_framebufferManager))
@@ -50,14 +51,13 @@ namespace vkp
         , m_syncManager(std::move(other.m_syncManager))
         , m_currentFrame(other.m_currentFrame)
     {
-        // 其他成员已移动
     }
 
-    // 移动赋值运算符
     VKEngine& VKEngine::operator=(VKEngine&& other) noexcept
     {
         if (this != &other)
         {
+            m_window = other.m_window;
             m_context = std::move(other.m_context);
             m_swapChain = std::move(other.m_swapChain);
             m_pipeline = std::move(other.m_pipeline);
@@ -72,7 +72,29 @@ namespace vkp
 
     void VKEngine::recreateSwapChain()
     {
-        // 实现重建逻辑（略）
+        // 等待设备空闲，确保所有资源释放安全
+        m_context->waitIdle();
+
+        // 清理所有相关资源（按依赖逆序）
+        m_syncManager.reset();
+        m_commandManager.reset();
+        m_bufferManager.reset();
+        m_framebufferManager.reset();
+        m_pipeline.reset();
+        m_swapChain.reset();
+
+        // 重新创建
+        m_swapChain = std::make_unique<SwapChain>(*m_context, m_window);
+        m_pipeline = std::make_unique<RenderPassPipeline>(*m_context, *m_swapChain);
+        m_framebufferManager = std::make_unique<FrameBufferManager>(*m_context, *m_swapChain, *m_pipeline);
+        m_commandManager =
+            std::make_unique<CommandManager>(*m_context, *m_swapChain, *m_pipeline, *m_framebufferManager);
+        m_bufferManager = std::make_unique<BufferManager>(*m_context, *m_swapChain, *m_pipeline, *m_commandManager);
+        m_commandManager->recordCommandBuffers(*m_context, *m_swapChain, *m_pipeline, *m_framebufferManager,
+                                               *m_bufferManager);
+        m_syncManager = std::make_unique<SyncManager>(*m_context, m_swapChain->getImageCount());
+
+        m_currentFrame = 0;
     }
 
     void VKEngine::drawFrame()
@@ -98,9 +120,11 @@ namespace vkp
         static auto startTime = std::chrono::high_resolution_clock::now();
         auto currentTime = std::chrono::high_resolution_clock::now();
         float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-        glm::mat4 model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        glm::mat4 view =
-            glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        glm::mat4 model = glm::mat4(1.0f);                        // 单位矩阵，三角形保持初始位置
+        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), // 相机位置在 Z 轴正方向
+                                     glm::vec3(0.0f, 0.0f, 0.0f), // 看向原点
+                                     glm::vec3(0.0f, 1.0f, 0.0f)  // 世界向上方向为 Y 轴
+        );
         glm::mat4 proj = glm::perspective(
             glm::radians(45.0f), m_swapChain->getExtent().width / (float)m_swapChain->getExtent().height, 0.1f, 10.0f);
         proj[1][1] *= -1;

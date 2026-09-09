@@ -1,20 +1,19 @@
 cmake_minimum_required(VERSION 3.20)
 project(VkProject VERSION 1.0.0 LANGUAGES CXX)
 
-# 查找包
 find_package(Vulkan REQUIRED)
 find_package(GLM REQUIRED)
 
-# 创建 GLFW 导入目标
 add_library(glfw STATIC IMPORTED)
 set_target_properties(glfw PROPERTIES
     IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/glfw/lib/libglfw3.a"
     INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/glfw/include"
 )
 
-# 着色器编译
-set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
-file(MAKE_DIRECTORY ${SHADER_DIR})
+# 着色器编译（输出到构建目录）
+set(SHADER_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+set(SHADER_OUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
+file(MAKE_DIRECTORY ${SHADER_OUT_DIR})
 
 function(compile_shader SHADER_SRC SHADER_SPV)
     add_custom_command(
@@ -25,12 +24,12 @@ function(compile_shader SHADER_SRC SHADER_SPV)
     )
 endfunction()
 
-compile_shader(${SHADER_DIR}/shader.vert ${SHADER_DIR}/vert.spv)
-compile_shader(${SHADER_DIR}/shader.frag ${SHADER_DIR}/frag.spv)
+compile_shader(${SHADER_SRC_DIR}/shader.vert ${SHADER_OUT_DIR}/vert.spv)
+compile_shader(${SHADER_SRC_DIR}/shader.frag ${SHADER_OUT_DIR}/frag.spv)
 
-add_custom_target(shaders DEPENDS ${SHADER_DIR}/vert.spv ${SHADER_DIR}/frag.spv)
+add_custom_target(shaders DEPENDS ${SHADER_OUT_DIR}/vert.spv ${SHADER_OUT_DIR}/frag.spv)
 
-# 创建可执行文件
+# 可执行文件
 add_executable(${PROJECT_NAME}
     src/main.cpp
     src/Application.cpp
@@ -53,14 +52,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-# 传递着色器目录宏，便于运行时定位文件
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-    SHADER_DIR="${SHADER_DIR}"
-)
-
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Vulkan::Vulkan
     glm::glm
     glfw
-    stdc++exp
 )

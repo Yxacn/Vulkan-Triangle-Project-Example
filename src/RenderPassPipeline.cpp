@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "BufferManager.hpp"
 #include "SwapChain.hpp"
 #include "VulkanContext.hpp"
 
@@ -147,20 +148,21 @@ namespace vkp
         VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
         // 顶点输入（假设顶点结构有 position 和 color）
+        // 顶点输入（使用 sizeof(Vertex)）
         VkVertexInputBindingDescription bindingDescription{};
         bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(float) * 6; // 位置3 + 颜色3
+        bindingDescription.stride = sizeof(Vertex); // 替代 sizeof(float)*6
         bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
         std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
         attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset = 0;
+        attributeDescriptions[0].offset = offsetof(Vertex, pos);
         attributeDescriptions[1].binding = 0;
         attributeDescriptions[1].location = 1;
         attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = sizeof(float) * 3;
+        attributeDescriptions[1].offset = offsetof(Vertex, color);
 
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -199,7 +201,7 @@ namespace vkp
         rasterizer.rasterizerDiscardEnable = VK_FALSE;
         rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
         rasterizer.lineWidth = 1.0f;
-        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+        rasterizer.cullMode = VK_CULL_MODE_NONE;
         rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
         rasterizer.depthBiasEnable = VK_FALSE;
 

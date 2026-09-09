@@ -1,3 +1,4 @@
+// BufferManager.hpp
 #pragma once
 
 #include <vector>
@@ -53,6 +54,7 @@ namespace vkp
                         VkDeviceSize size);
 
         VulkanContext* m_context;
+        SwapChain* m_swapChain;
         VkBuffer m_vertexBuffer;
         VkDeviceMemory m_vertexBufferMemory;
         VkBuffer m_indexBuffer;

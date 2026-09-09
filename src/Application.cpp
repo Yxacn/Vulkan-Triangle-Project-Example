@@ -7,8 +7,8 @@ namespace vkp
 {
     Application::Application(const WindowInfo& window_info, const VkApplicationInfo& app_info,
                              const VkInstanceCreateInfo& instance_create_info)
-        : m_vke(m_glw.getWindowInstance(), app_info, instance_create_info) // 先初始化引擎，需要窗口实例
-        , m_glw(window_info)                                               // 后初始化窗口
+        : m_glw(window_info)
+        , m_vke(m_glw.getWindowInstance(), app_info, instance_create_info)
     {
         // 初始化顺序依赖：引擎需要窗口句柄，故此处m_glw在初始化列表中排在m_vke之后，
         // 但实际构造顺序按声明顺序（先m_glw后m_vke），因此需确保在构造函数体内不依赖未构造的对象。
