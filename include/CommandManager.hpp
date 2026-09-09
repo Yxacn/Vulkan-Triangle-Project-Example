@@ -1,3 +1,4 @@
+// CommandManager.hpp
 #pragma once
 
 #include <vector>
@@ -6,7 +7,6 @@
 
 namespace vkp
 {
-
     class VulkanContext;
     class SwapChain;
     class RenderPassPipeline;

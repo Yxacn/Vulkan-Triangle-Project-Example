@@ -1,3 +1,4 @@
+// FrameBufferManager.cpp
 #include "FrameBufferManager.hpp"
 
 #include <stdexcept>
@@ -8,7 +9,6 @@
 
 namespace vkp
 {
-
     FrameBufferManager::FrameBufferManager(VulkanContext& context, SwapChain& swapChain, RenderPassPipeline& pipeline)
         : m_context(&context)
     {

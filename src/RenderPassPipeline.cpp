@@ -1,3 +1,4 @@
+// RenderPassPipeline.cpp
 #include "RenderPassPipeline.hpp"
 
 #include <array>
@@ -11,7 +12,6 @@
 
 namespace vkp
 {
-
     static std::vector<char> readFile(const std::string& filename)
     {
         std::ifstream file(filename, std::ios::ate | std::ios::binary);

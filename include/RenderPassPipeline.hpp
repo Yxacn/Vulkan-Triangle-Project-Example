@@ -1,10 +1,10 @@
+// RenderPassPipeline.hpp
 #pragma once
 
 #include <vulkan/vulkan.h>
 
 namespace vkp
 {
-
     class VulkanContext;
     class SwapChain;
 

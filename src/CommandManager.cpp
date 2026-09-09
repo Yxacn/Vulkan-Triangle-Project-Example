@@ -1,3 +1,4 @@
+// CommandManager.cpp
 #include "CommandManager.hpp"
 
 #include <stdexcept>
@@ -10,7 +11,6 @@
 
 namespace vkp
 {
-
     CommandManager::CommandManager(VulkanContext& context)
         : m_context(&context)
     {

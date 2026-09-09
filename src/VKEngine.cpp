@@ -1,3 +1,4 @@
+// VKEngine.cpp
 #include "VKEngine.hpp"
 
 #include <stdexcept>
@@ -15,7 +16,6 @@
 
 namespace vkp
 {
-
     VKEngine::VKEngine(GLFWwindow* window, const VkApplicationInfo& appInfo,
                        const VkInstanceCreateInfo& instanceCreateInfo)
         : m_window(window)
@@ -24,8 +24,7 @@ namespace vkp
         m_swapChain = std::make_unique<SwapChain>(*m_context, window);
         m_pipeline = std::make_unique<RenderPassPipeline>(*m_context, *m_swapChain);
         m_framebufferManager = std::make_unique<FrameBufferManager>(*m_context, *m_swapChain, *m_pipeline);
-        m_commandManager =
-            std::make_unique<CommandManager>(*m_context);
+        m_commandManager = std::make_unique<CommandManager>(*m_context);
         m_bufferManager = std::make_unique<BufferManager>(*m_context, *m_swapChain, *m_pipeline, *m_commandManager);
         updateUniformBuffers();
         m_commandManager->recordCommandBuffers(*m_context, *m_swapChain, *m_pipeline, *m_framebufferManager,
@@ -83,8 +82,7 @@ namespace vkp
         m_swapChain = std::make_unique<SwapChain>(*m_context, m_window);
         m_pipeline = std::make_unique<RenderPassPipeline>(*m_context, *m_swapChain);
         m_framebufferManager = std::make_unique<FrameBufferManager>(*m_context, *m_swapChain, *m_pipeline);
-        m_commandManager =
-            std::make_unique<CommandManager>(*m_context);
+        m_commandManager = std::make_unique<CommandManager>(*m_context);
         m_bufferManager = std::make_unique<BufferManager>(*m_context, *m_swapChain, *m_pipeline, *m_commandManager);
         updateUniformBuffers();
         m_commandManager->recordCommandBuffers(*m_context, *m_swapChain, *m_pipeline, *m_framebufferManager,
@@ -97,8 +95,8 @@ namespace vkp
     void VKEngine::updateUniformBuffers()
     {
         const glm::mat4 model(1.0f);
-        const glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
-                                           glm::vec3(0.0f, 1.0f, 0.0f));
+        const glm::mat4 view =
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 proj = glm::perspective(
             glm::radians(45.0f), m_swapChain->getExtent().width / (float)m_swapChain->getExtent().height, 0.1f, 10.0f);
         proj[1][1] *= -1;

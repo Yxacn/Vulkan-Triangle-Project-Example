@@ -1,6 +1,6 @@
+// VulkanContext.hpp
 #pragma once
 
-#include <string>
 #include <vector>
 
 #define GLFW_INCLUDE_VULKAN
@@ -9,7 +9,6 @@
 
 namespace vkp
 {
-
     // Vulkan 设备上下文
     class VulkanContext
     {

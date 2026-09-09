@@ -1,3 +1,4 @@
+// SyncManager.hpp
 #pragma once
 
 #include <array>
@@ -7,7 +8,6 @@
 
 namespace vkp
 {
-
     class VulkanContext;
 
     inline constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
@@ -25,10 +25,7 @@ namespace vkp
         {
             return m_imageAvailableSemaphores;
         }
-        const std::vector<VkSemaphore>& getRenderFinishedSemaphores() const
-        {
-            return m_renderFinishedSemaphores;
-        }
+        const std::vector<VkSemaphore>& getRenderFinishedSemaphores() const { return m_renderFinishedSemaphores; }
         const std::array<VkFence, MAX_FRAMES_IN_FLIGHT>& getInFlightFences() const { return m_inFlightFences; }
         std::vector<VkFence>& getImagesInFlight() { return m_imagesInFlight; }
 

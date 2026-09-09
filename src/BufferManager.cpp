@@ -1,3 +1,4 @@
+// BufferManager.cpp
 #include "BufferManager.hpp"
 
 #include <cstring>
@@ -10,7 +11,6 @@
 
 namespace vkp
 {
-
     BufferManager::BufferManager(VulkanContext& context, SwapChain& swapChain, RenderPassPipeline& pipeline,
                                  CommandManager& cmdManager)
         : m_context(&context)

@@ -1,3 +1,4 @@
+// SyncManager.cpp
 #include "SyncManager.hpp"
 
 #include <stdexcept>
@@ -6,7 +7,6 @@
 
 namespace vkp
 {
-
     SyncManager::SyncManager(VulkanContext& context, uint32_t imageCount)
         : m_context(&context)
     {

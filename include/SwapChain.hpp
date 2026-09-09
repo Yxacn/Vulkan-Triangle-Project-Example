@@ -1,3 +1,4 @@
+// SwapChain.hpp
 #pragma once
 
 #include <vector>
@@ -9,7 +10,6 @@
 
 namespace vkp
 {
-
     // 交换链管理
     class SwapChain
     {

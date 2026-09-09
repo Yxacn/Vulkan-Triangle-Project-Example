@@ -55,7 +55,7 @@ namespace vkp
             if (!glfwInit())
             {
                 --sm_glfwRefCount;
-                throw std::runtime_error("glfw初始化异常!");
+                throw std::runtime_error("Failed to init glfw!");
             }
         }
     }
@@ -67,7 +67,7 @@ namespace vkp
         m_window = glfwCreateWindow(m_w_info.WindowWidth, m_w_info.WindowHeight, m_w_info.WindowTitle.c_str(), nullptr,
                                     nullptr);
         if (!m_window)
-            throw std::runtime_error("glfw窗口创建失败");
+            throw std::runtime_error("Failed create glfw window");
         centerWindow();
     }
 

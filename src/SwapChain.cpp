@@ -1,3 +1,4 @@
+// SwapChain.cpp
 #include "SwapChain.hpp"
 
 #include <algorithm>
@@ -5,10 +6,8 @@
 
 #include "VulkanContext.hpp"
 
-
 namespace vkp
 {
-
     SwapChain::SwapChain(VulkanContext& context, GLFWwindow* window)
         : m_context(&context)
     {

@@ -6,7 +6,6 @@
 
 namespace vkp
 {
-
     class VulkanContext;
     class SwapChain;
     class RenderPassPipeline;
