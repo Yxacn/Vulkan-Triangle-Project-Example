@@ -1,9 +1,9 @@
-// RenderPassPipeline.cpp
 #include "RenderPassPipeline.hpp"
 
 #include <array>
 #include <fstream>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "BufferManager.hpp"
@@ -19,15 +19,22 @@ namespace vkp
         {
             throw std::runtime_error("Failed to open file: " + filename);
         }
-        size_t fileSize = (size_t)file.tellg();
-        std::vector<char> buffer(fileSize);
+        const std::streampos fileSize = file.tellg();
+        if (fileSize < 0)
+            throw std::runtime_error("Failed to read file: " + filename);
+
+        std::vector<char> buffer(static_cast<size_t>(fileSize));
         file.seekg(0);
-        file.read(buffer.data(), fileSize);
+        if (!buffer.empty() && !file.read(buffer.data(), static_cast<std::streamsize>(buffer.size())))
+            throw std::runtime_error("Failed to read file: " + filename);
         return buffer;
     }
 
     static VkShaderModule createShaderModule(VkDevice device, const std::vector<char>& code)
     {
+        if (code.empty() || code.size() % sizeof(uint32_t) != 0)
+            throw std::runtime_error("Invalid SPIR-V code!");
+
         VkShaderModuleCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         createInfo.codeSize = code.size();
@@ -43,22 +50,50 @@ namespace vkp
     RenderPassPipeline::RenderPassPipeline(VulkanContext& context, SwapChain& swapChain)
         : m_context(&context)
     {
-        createRenderPass(context, swapChain);
-        createDescriptorSetLayout(context);
-        createGraphicsPipeline(context, swapChain);
+        try
+        {
+            createRenderPass(context, swapChain);
+            createDescriptorSetLayout(context);
+            createGraphicsPipeline(context, swapChain);
+        }
+        catch (...)
+        {
+            destroyResources();
+            throw;
+        }
     }
 
     RenderPassPipeline::~RenderPassPipeline()
     {
+        destroyResources();
+    }
+
+    void RenderPassPipeline::destroyResources() noexcept
+    {
+        if (!m_context)
+            return;
+
         VkDevice device = m_context->getDevice();
         if (m_graphicsPipeline)
+        {
             vkDestroyPipeline(device, m_graphicsPipeline, nullptr);
+            m_graphicsPipeline = VK_NULL_HANDLE;
+        }
         if (m_pipelineLayout)
+        {
             vkDestroyPipelineLayout(device, m_pipelineLayout, nullptr);
+            m_pipelineLayout = VK_NULL_HANDLE;
+        }
         if (m_renderPass)
+        {
             vkDestroyRenderPass(device, m_renderPass, nullptr);
+            m_renderPass = VK_NULL_HANDLE;
+        }
         if (m_descriptorSetLayout)
+        {
             vkDestroyDescriptorSetLayout(device, m_descriptorSetLayout, nullptr);
+            m_descriptorSetLayout = VK_NULL_HANDLE;
+        }
     }
 
     void RenderPassPipeline::createRenderPass(VulkanContext& context, SwapChain& swapChain)
@@ -130,8 +165,21 @@ namespace vkp
     {
         auto vertShaderCode = readFile("shaders/vert.spv");
         auto fragShaderCode = readFile("shaders/frag.spv");
-        VkShaderModule vertShaderModule = createShaderModule(context.getDevice(), vertShaderCode);
-        VkShaderModule fragShaderModule = createShaderModule(context.getDevice(), fragShaderCode);
+        VkShaderModule vertShaderModule{ VK_NULL_HANDLE };
+        VkShaderModule fragShaderModule{ VK_NULL_HANDLE };
+        try
+        {
+            vertShaderModule = createShaderModule(context.getDevice(), vertShaderCode);
+            fragShaderModule = createShaderModule(context.getDevice(), fragShaderCode);
+        }
+        catch (...)
+        {
+            if (fragShaderModule)
+                vkDestroyShaderModule(context.getDevice(), fragShaderModule, nullptr);
+            if (vertShaderModule)
+                vkDestroyShaderModule(context.getDevice(), vertShaderModule, nullptr);
+            throw;
+        }
 
         VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
         vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -232,6 +280,8 @@ namespace vkp
 
         if (vkCreatePipelineLayout(context.getDevice(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS)
         {
+            vkDestroyShaderModule(context.getDevice(), vertShaderModule, nullptr);
+            vkDestroyShaderModule(context.getDevice(), fragShaderModule, nullptr);
             throw std::runtime_error("Failed to create pipeline layout!");
         }
 
@@ -253,6 +303,8 @@ namespace vkp
         if (vkCreateGraphicsPipelines(context.getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
                                       &m_graphicsPipeline) != VK_SUCCESS)
         {
+            vkDestroyShaderModule(context.getDevice(), vertShaderModule, nullptr);
+            vkDestroyShaderModule(context.getDevice(), fragShaderModule, nullptr);
             throw std::runtime_error("Failed to create graphics pipeline!");
         }
 

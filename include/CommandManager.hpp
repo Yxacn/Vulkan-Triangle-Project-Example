@@ -1,4 +1,3 @@
-// CommandManager.hpp
 #pragma once
 
 #include <vector>
@@ -31,8 +30,8 @@ namespace vkp
     private:
         void createCommandPool(VulkanContext& context);
 
-        VulkanContext* m_context;
-        VkCommandPool m_commandPool;
+        VulkanContext* m_context{ nullptr };
+        VkCommandPool m_commandPool{ VK_NULL_HANDLE };
         std::vector<VkCommandBuffer> m_commandBuffers;
     };
 

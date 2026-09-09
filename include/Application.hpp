@@ -1,4 +1,3 @@
-// Application.hpp
 #pragma once
 
 #include "GLWindow.hpp"
@@ -6,7 +5,6 @@
 
 namespace vkp
 {
-    // 默认 Vulkan 应用信息
     inline constexpr VkApplicationInfo defaultVkappInfo{
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pApplicationName = "VkProject",
@@ -15,7 +13,6 @@ namespace vkp
         .engineVersion = VK_MAKE_VERSION(1, 0, 0),
         .apiVersion = VK_API_VERSION_1_3,
     };
-    // 默认实例信息
     inline constexpr VkInstanceCreateInfo defaultVkInstanceCreateInfo{
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo = &defaultVkappInfo,
@@ -24,28 +21,22 @@ namespace vkp
         .enabledExtensionCount = 0,
         .ppEnabledExtensionNames = nullptr,
     };
-    // 应用主类
     class Application
     {
     public:
-        // 构造
-        explicit Application(const WindowInfo& window_info = { DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
+            explicit Application(const WindowInfo& window_info = { DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
                                                                DEFAULT_WINDOW_TITLE },
                              const VkApplicationInfo& app_info = defaultVkappInfo,
                              const VkInstanceCreateInfo& instace_create_info = defaultVkInstanceCreateInfo);
         ~Application();
 
-        // 移动构造
-        Application(Application&& other) noexcept;
-        // 移动赋值
-        Application& operator=(Application&& other) noexcept;
+            Application(Application&& other) noexcept;
+            Application& operator=(Application&& other) noexcept;
 
-        // 禁止拷贝
-        Application(const Application&) = delete;
+            Application(const Application&) = delete;
         Application& operator=(const Application&) = delete;
 
-        // 主循环
-        void run();
+            void run();
 
     private:
         GLWindow m_glw; // 窗口对象

@@ -1,4 +1,3 @@
-// VKEngine.hpp
 #pragma once
 
 #include <memory>
@@ -35,7 +34,7 @@ namespace vkp
         void recreateSwapChain();
         void updateUniformBuffers();
 
-        GLFWwindow* m_window;
+        GLFWwindow* m_window{ nullptr };
 
         std::unique_ptr<VulkanContext> m_context;
         std::unique_ptr<SwapChain> m_swapChain;

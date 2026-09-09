@@ -1,4 +1,3 @@
-// Application.cpp
 #include "Application.hpp"
 
 #include <utility>
@@ -20,7 +19,6 @@ namespace vkp
         : m_glw(std::move(other.m_glw))
         , m_vke(std::move(other.m_vke))
     {
-        // 移动构造
     }
 
     Application& Application::operator=(Application&& other) noexcept
@@ -35,11 +33,10 @@ namespace vkp
 
     void Application::run()
     {
-        // 主循环
         while (!glfwWindowShouldClose(m_glw.getWindowInstance()))
         {
-            glfwWaitEvents();
             m_vke.drawFrame();
+            glfwWaitEvents();
         }
     }
 } // namespace vkp

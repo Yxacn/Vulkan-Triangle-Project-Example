@@ -1,4 +1,3 @@
-// GLWindow.hpp
 #pragma once
 
 #include <string>
@@ -10,12 +9,10 @@ struct GLFWwindow;
 
 namespace vkp
 {
-    // 默认窗口参数
     constexpr inline int DEFAULT_WINDOW_WIDTH = 800;
     constexpr inline int DEFAULT_WINDOW_HEIGHT = 600;
     constexpr inline const char* DEFAULT_WINDOW_TITLE = "Vulkan";
 
-    // 窗口参数
     struct WindowInfo
     {
         int WindowWidth;         // 宽

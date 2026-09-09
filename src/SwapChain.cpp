@@ -1,4 +1,3 @@
-// SwapChain.cpp
 #include "SwapChain.hpp"
 
 #include <algorithm>
@@ -11,8 +10,16 @@ namespace vkp
     SwapChain::SwapChain(VulkanContext& context, GLFWwindow* window)
         : m_context(&context)
     {
-        createSwapChain(context, window);
-        createImageViews(context);
+        try
+        {
+            createSwapChain(context, window);
+            createImageViews(context);
+        }
+        catch (...)
+        {
+            cleanupSwapChain();
+            throw;
+        }
     }
 
     SwapChain::~SwapChain()
@@ -27,6 +34,7 @@ namespace vkp
             vkDestroyImageView(m_context->getDevice(), imageView, nullptr);
         }
         m_swapChainImageViews.clear();
+        m_swapChainImages.clear();
 
         if (m_swapChain != VK_NULL_HANDLE)
         {
@@ -69,20 +77,16 @@ namespace vkp
     static VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window)
     {
         if (capabilities.currentExtent.width != UINT32_MAX)
-        {
             return capabilities.currentExtent;
-        }
-        else
-        {
-            int width, height;
-            glfwGetFramebufferSize(window, &width, &height);
-            VkExtent2D actualExtent = { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
-            actualExtent.width =
-                std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
-            actualExtent.height =
-                std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
-            return actualExtent;
-        }
+
+        int width, height;
+        glfwGetFramebufferSize(window, &width, &height);
+        VkExtent2D actualExtent = { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
+        actualExtent.width =
+            std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+        actualExtent.height =
+            std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+        return actualExtent;
     }
 
     void SwapChain::createSwapChain(VulkanContext& context, GLFWwindow* window)
@@ -164,6 +168,9 @@ namespace vkp
 
             if (vkCreateImageView(context.getDevice(), &viewInfo, nullptr, &m_swapChainImageViews[i]) != VK_SUCCESS)
             {
+                for (size_t j = 0; j < i; j++)
+                    vkDestroyImageView(context.getDevice(), m_swapChainImageViews[j], nullptr);
+                m_swapChainImageViews.clear();
                 throw std::runtime_error("Failed to create image views!");
             }
         }

@@ -1,4 +1,3 @@
-// SyncManager.hpp
 #pragma once
 
 #include <array>

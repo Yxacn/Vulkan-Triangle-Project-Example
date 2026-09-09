@@ -1,4 +1,3 @@
-// VulkanContext.hpp
 #pragma once
 
 #include <vector>
@@ -9,7 +8,6 @@
 
 namespace vkp
 {
-    // Vulkan 设备上下文
     class VulkanContext
     {
     public:
@@ -33,7 +31,7 @@ namespace vkp
         {
             int graphicsFamily = -1;
             int presentFamily = -1;
-            bool isComplete() { return graphicsFamily >= 0 && presentFamily >= 0; }
+            bool isComplete() const { return graphicsFamily >= 0 && presentFamily >= 0; }
         };
         QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 
@@ -54,14 +52,15 @@ namespace vkp
 
         bool checkDeviceExtensionSupport(VkPhysicalDevice device);
         bool isDeviceSuitable(VkPhysicalDevice device);
+        void destroyResources() noexcept;
 
-        VkInstance m_instance;
-        VkDebugUtilsMessengerEXT m_debugMessenger;
-        VkSurfaceKHR m_surface;
-        VkPhysicalDevice m_physicalDevice;
-        VkDevice m_device;
-        VkQueue m_graphicsQueue;
-        VkQueue m_presentQueue;
+        VkInstance m_instance{ VK_NULL_HANDLE };
+        VkDebugUtilsMessengerEXT m_debugMessenger{ VK_NULL_HANDLE };
+        VkSurfaceKHR m_surface{ VK_NULL_HANDLE };
+        VkPhysicalDevice m_physicalDevice{ VK_NULL_HANDLE };
+        VkDevice m_device{ VK_NULL_HANDLE };
+        VkQueue m_graphicsQueue{ VK_NULL_HANDLE };
+        VkQueue m_presentQueue{ VK_NULL_HANDLE };
 
         // 配置常量
         const std::vector<const char*> m_validationLayers = { "VK_LAYER_KHRONOS_validation" };

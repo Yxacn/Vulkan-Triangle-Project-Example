@@ -1,14 +1,15 @@
-// VulkanContext.cpp
 #include "VulkanContext.hpp"
 
+#include <array>
+#include <cstring>
 #include <iostream>
-#include <set>
+#include <stdexcept>
+#include <vector>
 
 #include <GLFW/glfw3.h>
 
 namespace vkp
 {
-    // 调试回调
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                                                         VkDebugUtilsMessageTypeFlagsEXT messageType,
                                                         const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
@@ -21,37 +22,53 @@ namespace vkp
     VulkanContext::VulkanContext(GLFWwindow* window, const VkApplicationInfo& appInfo,
                                  const VkInstanceCreateInfo& instanceCreateInfo)
     {
-        createInstance(appInfo, instanceCreateInfo);
-        setupDebugMessenger();
-        createSurface(window);
-        pickPhysicalDevice();
-        createLogicalDevice();
+        try
+        {
+            createInstance(appInfo, instanceCreateInfo);
+            setupDebugMessenger();
+            createSurface(window);
+            pickPhysicalDevice();
+            createLogicalDevice();
+        }
+        catch (...)
+        {
+            destroyResources();
+            throw;
+        }
     }
 
     VulkanContext::~VulkanContext()
     {
+        destroyResources();
+    }
+
+    void VulkanContext::destroyResources() noexcept
+    {
         if (m_device)
         {
             vkDestroyDevice(m_device, nullptr);
+            m_device = VK_NULL_HANDLE;
         }
-        if (m_debugMessenger)
+        if (m_debugMessenger && m_instance)
         {
-            auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_instance,
-                                                                                   "vkDestroyDebugUtilsMessengerEXT");
+            auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+                vkGetInstanceProcAddr(m_instance, "vkDestroyDebugUtilsMessengerEXT"));
             if (func)
                 func(m_instance, m_debugMessenger, nullptr);
+            m_debugMessenger = VK_NULL_HANDLE;
         }
-        if (m_surface)
+        if (m_surface && m_instance)
         {
             vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+            m_surface = VK_NULL_HANDLE;
         }
         if (m_instance)
         {
             vkDestroyInstance(m_instance, nullptr);
+            m_instance = VK_NULL_HANDLE;
         }
     }
 
-    // 创建 Vulkan 实例
     void VulkanContext::createInstance(const VkApplicationInfo& appInfo, const VkInstanceCreateInfo& instanceCreateInfo)
     {
         if (m_enableValidationLayers)
@@ -87,7 +104,12 @@ namespace vkp
 
         uint32_t glfwExtensionCount = 0;
         const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-        std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+        if (!glfwExtensions)
+            throw std::runtime_error("Failed to get required glfw extensions!");
+
+        std::vector<const char*> extensions;
+        extensions.reserve(glfwExtensionCount + (m_enableValidationLayers ? 1u : 0u));
+        extensions.assign(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
         if (m_enableValidationLayers)
         {
@@ -125,7 +147,6 @@ namespace vkp
         }
     }
 
-    // 设置调试信使
     void VulkanContext::setupDebugMessenger()
     {
         if (!m_enableValidationLayers)
@@ -152,7 +173,6 @@ namespace vkp
         }
     }
 
-    // 创建窗口表面
     void VulkanContext::createSurface(GLFWwindow* window)
     {
         if (glfwCreateWindowSurface(m_instance, window, nullptr, &m_surface) != VK_SUCCESS)
@@ -161,7 +181,6 @@ namespace vkp
         }
     }
 
-    // 选择物理设备
     void VulkanContext::pickPhysicalDevice()
     {
         uint32_t deviceCount = 0;
@@ -189,21 +208,19 @@ namespace vkp
         }
     }
 
-    // 检查设备
     bool VulkanContext::isDeviceSuitable(VkPhysicalDevice device)
     {
+        if (!checkDeviceExtensionSupport(device))
+            return false;
+
         QueueFamilyIndices indices = findQueueFamilies(device);
-        bool extensionsSupported = checkDeviceExtensionSupport(device);
-        bool swapChainAdequate = false;
-        if (extensionsSupported)
-        {
-            SwapChainSupportDetails details = querySwapChainSupport(device);
-            swapChainAdequate = !details.formats.empty() && !details.presentModes.empty();
-        }
-        return indices.isComplete() && extensionsSupported && swapChainAdequate;
+        if (!indices.isComplete())
+            return false;
+
+        SwapChainSupportDetails details = querySwapChainSupport(device);
+        return !details.formats.empty() && !details.presentModes.empty();
     }
 
-    // 查找队列族
     VulkanContext::QueueFamilyIndices VulkanContext::findQueueFamilies(VkPhysicalDevice device)
     {
         QueueFamilyIndices indices;
@@ -214,15 +231,16 @@ namespace vkp
 
         for (uint32_t i = 0; i < queueFamilyCount; i++)
         {
-            if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            if (indices.graphicsFamily < 0 && (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT))
             {
-                indices.graphicsFamily = i;
+                indices.graphicsFamily = static_cast<int>(i);
             }
-            VkBool32 presentSupport = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface, &presentSupport);
-            if (presentSupport)
+            if (indices.presentFamily < 0)
             {
-                indices.presentFamily = i;
+                VkBool32 presentSupport = false;
+                vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface, &presentSupport);
+                if (presentSupport)
+                    indices.presentFamily = static_cast<int>(i);
             }
             if (indices.isComplete())
                 break;
@@ -230,7 +248,6 @@ namespace vkp
         return indices;
     }
 
-    // 查询交换链支持
     VulkanContext::SwapChainSupportDetails VulkanContext::querySwapChainSupport(VkPhysicalDevice device)
     {
         SwapChainSupportDetails details;
@@ -253,47 +270,57 @@ namespace vkp
         return details;
     }
 
-    // 检查设备扩展
     bool VulkanContext::checkDeviceExtensionSupport(VkPhysicalDevice device)
     {
-        uint32_t extensionCount;
+        uint32_t extensionCount = 0;
         vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
         std::vector<VkExtensionProperties> availableExtensions(extensionCount);
         vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
 
-        std::set<std::string> requiredExtensions(m_deviceExtensions.begin(), m_deviceExtensions.end());
-        for (const auto& ext : availableExtensions)
+        for (const char* requiredExtension : m_deviceExtensions)
         {
-            requiredExtensions.erase(ext.extensionName);
+            bool found = false;
+            for (const auto& extension : availableExtensions)
+            {
+                if (strcmp(requiredExtension, extension.extensionName) == 0)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+                return false;
         }
-        return requiredExtensions.empty();
+        return true;
     }
 
-    // 创建逻辑设备
     void VulkanContext::createLogicalDevice()
     {
         QueueFamilyIndices indices = findQueueFamilies(m_physicalDevice);
 
-        std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-        std::set<uint32_t> uniqueQueueFamilies = { static_cast<uint32_t>(indices.graphicsFamily),
-                                                   static_cast<uint32_t>(indices.presentFamily) };
+        const uint32_t graphicsFamily = static_cast<uint32_t>(indices.graphicsFamily);
+        const uint32_t presentFamily = static_cast<uint32_t>(indices.presentFamily);
 
         float queuePriority = 1.0f;
-        for (uint32_t family : uniqueQueueFamilies)
+        std::array<VkDeviceQueueCreateInfo, 2> queueCreateInfos{};
+        queueCreateInfos[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfos[0].queueFamilyIndex = graphicsFamily;
+        queueCreateInfos[0].queueCount = 1;
+        queueCreateInfos[0].pQueuePriorities = &queuePriority;
+
+        uint32_t queueCreateInfoCount = 1;
+        if (graphicsFamily != presentFamily)
         {
-            VkDeviceQueueCreateInfo queueCreateInfo{};
-            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queueCreateInfo.queueFamilyIndex = family;
-            queueCreateInfo.queueCount = 1;
-            queueCreateInfo.pQueuePriorities = &queuePriority;
-            queueCreateInfos.push_back(queueCreateInfo);
+            queueCreateInfos[1] = queueCreateInfos[0];
+            queueCreateInfos[1].queueFamilyIndex = presentFamily;
+            ++queueCreateInfoCount;
         }
 
         VkPhysicalDeviceFeatures deviceFeatures{};
 
         VkDeviceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+        createInfo.queueCreateInfoCount = queueCreateInfoCount;
         createInfo.pQueueCreateInfos = queueCreateInfos.data();
         createInfo.pEnabledFeatures = &deviceFeatures;
         createInfo.enabledExtensionCount = static_cast<uint32_t>(m_deviceExtensions.size());

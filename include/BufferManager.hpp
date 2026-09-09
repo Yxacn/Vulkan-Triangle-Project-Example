@@ -1,6 +1,6 @@
-// BufferManager.hpp
 #pragma once
 
+#include <array>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -13,7 +13,6 @@ namespace vkp
     class RenderPassPipeline;
     class CommandManager;
 
-    // 顶点数据
     struct Vertex
     {
         glm::vec3 pos;
@@ -31,11 +30,9 @@ namespace vkp
         BufferManager(const BufferManager&) = delete;
         BufferManager& operator=(const BufferManager&) = delete;
 
-        // 更新 Uniform
         void updateUniformBuffer(uint32_t currentImage, const glm::mat4& model, const glm::mat4& view,
                                  const glm::mat4& proj);
 
-        // 绑定缓冲和描述符集
         void bindBuffers(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, uint32_t currentImage) const;
 
     private:
@@ -45,31 +42,30 @@ namespace vkp
         void createDescriptorPool(VulkanContext& context);
         void createDescriptorSets(VulkanContext& context, RenderPassPipeline& pipeline);
 
-        // 辅助函数
         uint32_t findMemoryType(VulkanContext& context, uint32_t typeFilter, VkMemoryPropertyFlags properties);
         void createBuffer(VulkanContext& context, VkDeviceSize size, VkBufferUsageFlags usage,
                           VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
         void copyBuffer(VulkanContext& context, CommandManager& cmdManager, VkBuffer srcBuffer, VkBuffer dstBuffer,
                         VkDeviceSize size);
+        void destroyResources() noexcept;
 
-        VulkanContext* m_context;
-        SwapChain* m_swapChain;
-        VkBuffer m_vertexBuffer;
-        VkDeviceMemory m_vertexBufferMemory;
-        VkBuffer m_indexBuffer;
-        VkDeviceMemory m_indexBufferMemory;
+        VulkanContext* m_context{ nullptr };
+        SwapChain* m_swapChain{ nullptr };
+        VkBuffer m_vertexBuffer{ VK_NULL_HANDLE };
+        VkDeviceMemory m_vertexBufferMemory{ VK_NULL_HANDLE };
+        VkBuffer m_indexBuffer{ VK_NULL_HANDLE };
+        VkDeviceMemory m_indexBufferMemory{ VK_NULL_HANDLE };
         std::vector<VkBuffer> m_uniformBuffers;
         std::vector<VkDeviceMemory> m_uniformBuffersMemory;
         std::vector<void*> m_uniformBuffersMapped;
 
-        VkDescriptorPool m_descriptorPool;
+        VkDescriptorPool m_descriptorPool{ VK_NULL_HANDLE };
         std::vector<VkDescriptorSet> m_descriptorSets;
 
-        // 顶点数据
-        const std::vector<Vertex> m_vertices = { { { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
-                                                 { { 0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
-                                                 { { 0.0f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } } };
-        const std::vector<uint16_t> m_indices = { 0, 1, 2 };
+        const std::array<Vertex, 3> m_vertices = {{ { { -0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+                                                     { { 0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+                                                     { { 0.0f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } } }};
+        const std::array<uint16_t, 3> m_indices = { 0, 1, 2 };
     };
 
 } // namespace vkp

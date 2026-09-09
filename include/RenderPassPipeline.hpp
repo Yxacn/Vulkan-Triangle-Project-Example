@@ -1,4 +1,3 @@
-// RenderPassPipeline.hpp
 #pragma once
 
 #include <vulkan/vulkan.h>
@@ -8,7 +7,6 @@ namespace vkp
     class VulkanContext;
     class SwapChain;
 
-    // 管理渲染通道、图形管线和描述符集布局
     class RenderPassPipeline
     {
     public:
@@ -27,12 +25,13 @@ namespace vkp
         void createRenderPass(VulkanContext& context, SwapChain& swapChain);
         void createDescriptorSetLayout(VulkanContext& context);
         void createGraphicsPipeline(VulkanContext& context, SwapChain& swapChain);
+        void destroyResources() noexcept;
 
-        VulkanContext* m_context;
-        VkRenderPass m_renderPass;
-        VkPipelineLayout m_pipelineLayout;
-        VkPipeline m_graphicsPipeline;
-        VkDescriptorSetLayout m_descriptorSetLayout;
+        VulkanContext* m_context{ nullptr };
+        VkRenderPass m_renderPass{ VK_NULL_HANDLE };
+        VkPipelineLayout m_pipelineLayout{ VK_NULL_HANDLE };
+        VkPipeline m_graphicsPipeline{ VK_NULL_HANDLE };
+        VkDescriptorSetLayout m_descriptorSetLayout{ VK_NULL_HANDLE };
     };
 
 } // namespace vkp

@@ -1,4 +1,3 @@
-// CommandManager.cpp
 #include "CommandManager.hpp"
 
 #include <stdexcept>
@@ -19,11 +18,12 @@ namespace vkp
 
     CommandManager::~CommandManager()
     {
+        if (!m_context)
+            return;
+
         VkDevice device = m_context->getDevice();
         if (m_commandPool)
-        {
             vkDestroyCommandPool(device, m_commandPool, nullptr);
-        }
     }
 
     void CommandManager::createCommandPool(VulkanContext& context)
@@ -45,21 +45,28 @@ namespace vkp
                                               BufferManager& bufferManager)
     {
         const auto& framebuffers = framebufferManager.getFramebuffers();
-        size_t imageCount = framebuffers.size();
+        uint32_t imageCount = static_cast<uint32_t>(framebuffers.size());
+
+        if (!m_commandBuffers.empty())
+        {
+            vkFreeCommandBuffers(context.getDevice(), m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()),
+                                  m_commandBuffers.data());
+            m_commandBuffers.clear();
+        }
         m_commandBuffers.resize(imageCount);
 
         VkCommandBufferAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         allocInfo.commandPool = m_commandPool;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = static_cast<uint32_t>(imageCount);
+        allocInfo.commandBufferCount = imageCount;
 
         if (vkAllocateCommandBuffers(context.getDevice(), &allocInfo, m_commandBuffers.data()) != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to allocate command buffers!");
         }
 
-        for (size_t i = 0; i < imageCount; i++)
+        for (uint32_t i = 0; i < imageCount; i++)
         {
             VkCommandBufferBeginInfo beginInfo{};
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;

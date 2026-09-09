@@ -10,7 +10,6 @@ namespace vkp
     class SwapChain;
     class RenderPassPipeline;
 
-    // 管理帧缓冲
     class FrameBufferManager
     {
     public:
@@ -25,9 +24,10 @@ namespace vkp
         void recreateFramebuffers(VulkanContext& context, SwapChain& swapChain, VkRenderPass renderPass);
 
     private:
+        void destroyFramebuffers(VulkanContext& context) noexcept;
         void createFramebuffers(VulkanContext& context, SwapChain& swapChain, VkRenderPass renderPass);
 
-        VulkanContext* m_context;
+        VulkanContext* m_context{ nullptr };
         std::vector<VkFramebuffer> m_swapChainFramebuffers;
     };
 

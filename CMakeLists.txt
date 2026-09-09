@@ -10,17 +10,19 @@ set_target_properties(glfw PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/glfw/include"
 )
 
-# 着色器编译（输出到构建目录）
 set(SHADER_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 set(SHADER_OUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 file(MAKE_DIRECTORY ${SHADER_OUT_DIR})
 
+find_program(GLSLC_EXECUTABLE glslc REQUIRED)
+
 function(compile_shader SHADER_SRC SHADER_SPV)
     add_custom_command(
         OUTPUT ${SHADER_SPV}
-        COMMAND glslc -o ${SHADER_SPV} ${SHADER_SRC}
+        COMMAND ${GLSLC_EXECUTABLE} -o ${SHADER_SPV} ${SHADER_SRC}
         DEPENDS ${SHADER_SRC}
         COMMENT "Compiling shader ${SHADER_SRC}"
+        VERBATIM
     )
 endfunction()
 
@@ -29,7 +31,6 @@ compile_shader(${SHADER_SRC_DIR}/shader.frag ${SHADER_OUT_DIR}/frag.spv)
 
 add_custom_target(shaders DEPENDS ${SHADER_OUT_DIR}/vert.spv ${SHADER_OUT_DIR}/frag.spv)
 
-# 可执行文件
 add_executable(${PROJECT_NAME}
     src/main.cpp
     src/Application.cpp

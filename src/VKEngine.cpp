@@ -1,7 +1,7 @@
-// VKEngine.cpp
 #include "VKEngine.hpp"
 
 #include <stdexcept>
+#include <utility>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -49,12 +49,25 @@ namespace vkp
         , m_syncManager(std::move(other.m_syncManager))
         , m_currentFrame(other.m_currentFrame)
     {
+        other.m_window = nullptr;
+        other.m_currentFrame = 0;
     }
 
     VKEngine& VKEngine::operator=(VKEngine&& other) noexcept
     {
         if (this != &other)
         {
+            if (m_context)
+                m_context->waitIdle();
+
+            m_syncManager.reset();
+            m_commandManager.reset();
+            m_bufferManager.reset();
+            m_framebufferManager.reset();
+            m_pipeline.reset();
+            m_swapChain.reset();
+            m_context.reset();
+
             m_window = other.m_window;
             m_context = std::move(other.m_context);
             m_swapChain = std::move(other.m_swapChain);
@@ -64,6 +77,8 @@ namespace vkp
             m_commandManager = std::move(other.m_commandManager);
             m_syncManager = std::move(other.m_syncManager);
             m_currentFrame = other.m_currentFrame;
+            other.m_window = nullptr;
+            other.m_currentFrame = 0;
         }
         return *this;
     }

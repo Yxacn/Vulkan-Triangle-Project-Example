@@ -1,4 +1,3 @@
-// SyncManager.cpp
 #include "SyncManager.hpp"
 
 #include <stdexcept>
@@ -15,18 +14,24 @@ namespace vkp
 
     SyncManager::~SyncManager()
     {
+        if (!m_context)
+            return;
+
         VkDevice device = m_context->getDevice();
         for (auto semaphore : m_imageAvailableSemaphores)
         {
-            vkDestroySemaphore(device, semaphore, nullptr);
+            if (semaphore)
+                vkDestroySemaphore(device, semaphore, nullptr);
         }
         for (auto semaphore : m_renderFinishedSemaphores)
         {
-            vkDestroySemaphore(device, semaphore, nullptr);
+            if (semaphore)
+                vkDestroySemaphore(device, semaphore, nullptr);
         }
         for (auto fence : m_inFlightFences)
         {
-            vkDestroyFence(device, fence, nullptr);
+            if (fence)
+                vkDestroyFence(device, fence, nullptr);
         }
     }
 
@@ -43,12 +48,31 @@ namespace vkp
 
         m_renderFinishedSemaphores.resize(imageCount);
 
+        const auto cleanup = [&]() {
+            for (auto semaphore : m_imageAvailableSemaphores)
+            {
+                if (semaphore)
+                    vkDestroySemaphore(context.getDevice(), semaphore, nullptr);
+            }
+            for (auto semaphore : m_renderFinishedSemaphores)
+            {
+                if (semaphore)
+                    vkDestroySemaphore(context.getDevice(), semaphore, nullptr);
+            }
+            for (auto fence : m_inFlightFences)
+            {
+                if (fence)
+                    vkDestroyFence(context.getDevice(), fence, nullptr);
+            }
+        };
+
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
         {
             if (vkCreateSemaphore(context.getDevice(), &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]) !=
                     VK_SUCCESS ||
                 vkCreateFence(context.getDevice(), &fenceInfo, nullptr, &m_inFlightFences[i]) != VK_SUCCESS)
             {
+                cleanup();
                 throw std::runtime_error("Failed to create synchronization objects!");
             }
         }
@@ -57,6 +81,7 @@ namespace vkp
         {
             if (vkCreateSemaphore(context.getDevice(), &semaphoreInfo, nullptr, &semaphore) != VK_SUCCESS)
             {
+                cleanup();
                 throw std::runtime_error("Failed to create synchronization objects!");
             }
         }

@@ -1,4 +1,3 @@
-// FrameBufferManager.cpp
 #include "FrameBufferManager.hpp"
 
 #include <stdexcept>
@@ -17,19 +16,23 @@ namespace vkp
 
     FrameBufferManager::~FrameBufferManager()
     {
+        if (m_context)
+            destroyFramebuffers(*m_context);
+    }
+
+    void FrameBufferManager::destroyFramebuffers(VulkanContext& context) noexcept
+    {
         for (auto framebuffer : m_swapChainFramebuffers)
         {
-            vkDestroyFramebuffer(m_context->getDevice(), framebuffer, nullptr);
+            if (framebuffer)
+                vkDestroyFramebuffer(context.getDevice(), framebuffer, nullptr);
         }
+        m_swapChainFramebuffers.clear();
     }
 
     void FrameBufferManager::recreateFramebuffers(VulkanContext& context, SwapChain& swapChain, VkRenderPass renderPass)
     {
-        for (auto framebuffer : m_swapChainFramebuffers)
-        {
-            vkDestroyFramebuffer(context.getDevice(), framebuffer, nullptr);
-        }
-        m_swapChainFramebuffers.clear();
+        destroyFramebuffers(context);
         createFramebuffers(context, swapChain, renderPass);
     }
 
@@ -54,6 +57,7 @@ namespace vkp
             if (vkCreateFramebuffer(context.getDevice(), &framebufferInfo, nullptr, &m_swapChainFramebuffers[i]) !=
                 VK_SUCCESS)
             {
+                destroyFramebuffers(context);
                 throw std::runtime_error("Failed to create framebuffer!");
             }
         }

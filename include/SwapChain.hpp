@@ -1,4 +1,3 @@
-// SwapChain.hpp
 #pragma once
 
 #include <vector>
@@ -10,7 +9,6 @@
 
 namespace vkp
 {
-    // 交换链管理
     class SwapChain
     {
     public:
@@ -39,11 +37,11 @@ namespace vkp
         void createSwapChain(VulkanContext& context, GLFWwindow* window);
         void createImageViews(VulkanContext& context);
 
-        VulkanContext* m_context;
-        VkSwapchainKHR m_swapChain;
+        VulkanContext* m_context{ nullptr };
+        VkSwapchainKHR m_swapChain{ VK_NULL_HANDLE };
         std::vector<VkImage> m_swapChainImages;
-        VkFormat m_swapChainImageFormat;
-        VkExtent2D m_swapChainExtent;
+        VkFormat m_swapChainImageFormat{ VK_FORMAT_UNDEFINED };
+        VkExtent2D m_swapChainExtent{};
         std::vector<VkImageView> m_swapChainImageViews;
     };
 
