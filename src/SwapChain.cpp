@@ -1,3 +1,4 @@
+// SwapChain.cpp
 #include "SwapChain.hpp"
 
 #include <algorithm>
@@ -29,16 +30,21 @@ namespace vkp
 
     void SwapChain::cleanupSwapChain()
     {
-        for (auto imageView : m_swapChainImageViews)
+        if (!m_context)
+            return;
+
+        const VkDevice device = m_context->getDevice();
+        for (VkImageView imageView : m_swapChainImageViews)
         {
-            vkDestroyImageView(m_context->getDevice(), imageView, nullptr);
+            if (imageView)
+                vkDestroyImageView(device, imageView, nullptr);
         }
         m_swapChainImageViews.clear();
         m_swapChainImages.clear();
 
         if (m_swapChain != VK_NULL_HANDLE)
         {
-            vkDestroySwapchainKHR(m_context->getDevice(), m_swapChain, nullptr);
+            vkDestroySwapchainKHR(device, m_swapChain, nullptr);
             m_swapChain = VK_NULL_HANDLE;
         }
     }
@@ -46,11 +52,21 @@ namespace vkp
     void SwapChain::recreateSwapChain(VulkanContext& context, GLFWwindow* window)
     {
         cleanupSwapChain();
-        createSwapChain(context, window);
-        createImageViews(context);
+        try
+        {
+            createSwapChain(context, window);
+            createImageViews(context);
+        }
+        catch (...)
+        {
+            cleanupSwapChain();
+            throw;
+        }
     }
 
-    static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+    // 偏好 SRGB + Mailbox，不支持时回退到可用格式与 FIFO
+    [[nodiscard]] static VkSurfaceFormatKHR
+    chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
     {
         for (const auto& format : availableFormats)
         {
@@ -62,7 +78,8 @@ namespace vkp
         return availableFormats[0];
     }
 
-    static VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
+    [[nodiscard]] static VkPresentModeKHR
+    chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
     {
         for (const auto& mode : availablePresentModes)
         {
@@ -74,7 +91,7 @@ namespace vkp
         return VK_PRESENT_MODE_FIFO_KHR;
     }
 
-    static VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window)
+    [[nodiscard]] static VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window)
     {
         if (capabilities.currentExtent.width != UINT32_MAX)
             return capabilities.currentExtent;
@@ -91,10 +108,16 @@ namespace vkp
 
     void SwapChain::createSwapChain(VulkanContext& context, GLFWwindow* window)
     {
-        auto support = context.querySwapChainSupport(context.getPhysicalDevice());
-        VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(support.formats);
-        VkPresentModeKHR presentMode = chooseSwapPresentMode(support.presentModes);
-        VkExtent2D extent = chooseSwapExtent(support.capabilities, window);
+        const VulkanContext::SwapChainSupportDetails support =
+            context.querySwapChainSupport(context.getPhysicalDevice());
+        if (support.formats.empty() || support.presentModes.empty())
+        {
+            throw std::runtime_error("Swap chain support is incomplete!");
+        }
+
+        const VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(support.formats);
+        const VkPresentModeKHR presentMode = chooseSwapPresentMode(support.presentModes);
+        const VkExtent2D extent = chooseSwapExtent(support.capabilities, window);
 
         uint32_t imageCount = support.capabilities.minImageCount + 1;
         if (support.capabilities.maxImageCount > 0 && imageCount > support.capabilities.maxImageCount)
@@ -112,10 +135,8 @@ namespace vkp
         createInfo.imageArrayLayers = 1;
         createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-        auto indices = context.findQueueFamilies(context.getPhysicalDevice());
-        uint32_t queueFamilyIndices[] = { static_cast<uint32_t>(indices.graphicsFamily),
-                                          static_cast<uint32_t>(indices.presentFamily) };
-
+        const VulkanContext::QueueFamilyIndices indices = context.findQueueFamilies(context.getPhysicalDevice());
+        const uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
         if (indices.graphicsFamily != indices.presentFamily)
         {
             createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
@@ -148,8 +169,8 @@ namespace vkp
 
     void SwapChain::createImageViews(VulkanContext& context)
     {
-        m_swapChainImageViews.resize(m_swapChainImages.size());
-        for (size_t i = 0; i < m_swapChainImages.size(); i++)
+        std::vector<VkImageView> imageViews(m_swapChainImages.size());
+        for (size_t i = 0; i < m_swapChainImages.size(); ++i)
         {
             VkImageViewCreateInfo viewInfo{};
             viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -166,14 +187,16 @@ namespace vkp
             viewInfo.subresourceRange.baseArrayLayer = 0;
             viewInfo.subresourceRange.layerCount = 1;
 
-            if (vkCreateImageView(context.getDevice(), &viewInfo, nullptr, &m_swapChainImageViews[i]) != VK_SUCCESS)
+            if (vkCreateImageView(context.getDevice(), &viewInfo, nullptr, &imageViews[i]) != VK_SUCCESS)
             {
-                for (size_t j = 0; j < i; j++)
-                    vkDestroyImageView(context.getDevice(), m_swapChainImageViews[j], nullptr);
-                m_swapChainImageViews.clear();
+                for (size_t j = 0; j < i; ++j)
+                {
+                    vkDestroyImageView(context.getDevice(), imageViews[j], nullptr);
+                }
                 throw std::runtime_error("Failed to create image views!");
             }
         }
+        m_swapChainImageViews = std::move(imageViews);
     }
 
 } // namespace vkp

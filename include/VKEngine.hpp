@@ -1,3 +1,4 @@
+// VKEngine.hpp
 #pragma once
 
 #include <memory>
@@ -31,6 +32,8 @@ namespace vkp
         void waitIdle();
 
     private:
+        void createRenderingResources();
+        void destroyRenderingResources() noexcept;
         void recreateSwapChain();
         void updateUniformBuffers();
 
@@ -44,7 +47,7 @@ namespace vkp
         std::unique_ptr<CommandManager> m_commandManager;
         std::unique_ptr<SyncManager> m_syncManager;
 
-        uint32_t m_currentFrame = 0;
+        uint32_t m_currentFrame{ 0 };
     };
 
 } // namespace vkp

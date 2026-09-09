@@ -1,3 +1,4 @@
+// SwapChain.hpp
 #pragma once
 
 #include <vector>
@@ -21,13 +22,13 @@ namespace vkp
         void recreateSwapChain(VulkanContext& context, GLFWwindow* window);
         void cleanupSwapChain();
 
-        VkSwapchainKHR getSwapChain() const { return m_swapChain; }
-        VkFormat getImageFormat() const { return m_swapChainImageFormat; }
-        VkExtent2D getExtent() const { return m_swapChainExtent; }
-        const std::vector<VkImageView>& getImageViews() const { return m_swapChainImageViews; }
-        uint32_t getImageCount() const { return static_cast<uint32_t>(m_swapChainImages.size()); }
+        [[nodiscard]] VkSwapchainKHR getSwapChain() const { return m_swapChain; }
+        [[nodiscard]] VkFormat getImageFormat() const { return m_swapChainImageFormat; }
+        [[nodiscard]] VkExtent2D getExtent() const { return m_swapChainExtent; }
+        [[nodiscard]] const std::vector<VkImageView>& getImageViews() const { return m_swapChainImageViews; }
+        [[nodiscard]] uint32_t getImageCount() const { return static_cast<uint32_t>(m_swapChainImages.size()); }
 
-        VkResult acquireNextImage(VkSemaphore semaphore, uint32_t& imageIndex)
+        [[nodiscard]] VkResult acquireNextImage(VkSemaphore semaphore, uint32_t& imageIndex) const
         {
             return vkAcquireNextImageKHR(m_context->getDevice(), m_swapChain, UINT64_MAX, semaphore, VK_NULL_HANDLE,
                                          &imageIndex);

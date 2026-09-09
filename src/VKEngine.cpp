@@ -1,5 +1,7 @@
+// VKEngine.cpp
 #include "VKEngine.hpp"
 
+#include <array>
 #include <stdexcept>
 #include <utility>
 
@@ -21,15 +23,7 @@ namespace vkp
         : m_window(window)
     {
         m_context = std::make_unique<VulkanContext>(window, appInfo, instanceCreateInfo);
-        m_swapChain = std::make_unique<SwapChain>(*m_context, window);
-        m_pipeline = std::make_unique<RenderPassPipeline>(*m_context, *m_swapChain);
-        m_framebufferManager = std::make_unique<FrameBufferManager>(*m_context, *m_swapChain, *m_pipeline);
-        m_commandManager = std::make_unique<CommandManager>(*m_context);
-        m_bufferManager = std::make_unique<BufferManager>(*m_context, *m_swapChain, *m_pipeline, *m_commandManager);
-        updateUniformBuffers();
-        m_commandManager->recordCommandBuffers(*m_context, *m_swapChain, *m_pipeline, *m_framebufferManager,
-                                               *m_bufferManager);
-        m_syncManager = std::make_unique<SyncManager>(*m_context, m_swapChain->getImageCount());
+        createRenderingResources();
     }
 
     VKEngine::~VKEngine()
@@ -60,12 +54,7 @@ namespace vkp
             if (m_context)
                 m_context->waitIdle();
 
-            m_syncManager.reset();
-            m_commandManager.reset();
-            m_bufferManager.reset();
-            m_framebufferManager.reset();
-            m_pipeline.reset();
-            m_swapChain.reset();
+            destroyRenderingResources();
             m_context.reset();
 
             m_window = other.m_window;
@@ -83,17 +72,9 @@ namespace vkp
         return *this;
     }
 
-    void VKEngine::recreateSwapChain()
+    // 资源创建顺序：交换链 -> 管线 -> 帧缓冲 -> 命令 -> 同步对象
+    void VKEngine::createRenderingResources()
     {
-        m_context->waitIdle();
-
-        m_syncManager.reset();
-        m_commandManager.reset();
-        m_bufferManager.reset();
-        m_framebufferManager.reset();
-        m_pipeline.reset();
-        m_swapChain.reset();
-
         m_swapChain = std::make_unique<SwapChain>(*m_context, m_window);
         m_pipeline = std::make_unique<RenderPassPipeline>(*m_context, *m_swapChain);
         m_framebufferManager = std::make_unique<FrameBufferManager>(*m_context, *m_swapChain, *m_pipeline);
@@ -103,8 +84,33 @@ namespace vkp
         m_commandManager->recordCommandBuffers(*m_context, *m_swapChain, *m_pipeline, *m_framebufferManager,
                                                *m_bufferManager);
         m_syncManager = std::make_unique<SyncManager>(*m_context, m_swapChain->getImageCount());
+    }
 
+    void VKEngine::destroyRenderingResources() noexcept
+    {
+        m_syncManager.reset();
+        m_commandManager.reset();
+        m_bufferManager.reset();
+        m_framebufferManager.reset();
+        m_pipeline.reset();
+        m_swapChain.reset();
+    }
+
+    void VKEngine::recreateSwapChain()
+    {
+        m_context->waitIdle();
+
+        destroyRenderingResources();
         m_currentFrame = 0;
+        try
+        {
+            createRenderingResources();
+        }
+        catch (...)
+        {
+            destroyRenderingResources();
+            throw;
+        }
     }
 
     void VKEngine::updateUniformBuffers()
@@ -116,23 +122,29 @@ namespace vkp
             glm::radians(45.0f), m_swapChain->getExtent().width / (float)m_swapChain->getExtent().height, 0.1f, 10.0f);
         proj[1][1] *= -1;
 
-        for (uint32_t i = 0; i < m_swapChain->getImageCount(); i++)
+        const UniformBufferObject ubo{ model, view, proj };
+        for (uint32_t i = 0; i < m_swapChain->getImageCount(); ++i)
         {
-            m_bufferManager->updateUniformBuffer(i, model, view, proj);
+            m_bufferManager->updateUniformBuffer(i, ubo);
         }
     }
 
+    // 双缓冲同步：先等待当前帧围栏，再取图、提交、呈现；
+    // 只有呈现完成并推进 currentFrame 后，下一帧才会复用这套资源。
     void VKEngine::drawFrame()
     {
         const auto& imageAvailableSemaphores = m_syncManager->getImageAvailableSemaphores();
         const auto& renderFinishedSemaphores = m_syncManager->getRenderFinishedSemaphores();
         const auto& fences = m_syncManager->getInFlightFences();
-        auto& imagesInFlight = m_syncManager->getImagesInFlight();
-        VkFence inFlightFence = fences[m_currentFrame];
+        const VkFence inFlightFence = fences[m_currentFrame];
 
-        vkWaitForFences(m_context->getDevice(), 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+        // 等待上一帧的栅栏，保证当前帧可安全复用
+        if (vkWaitForFences(m_context->getDevice(), 1, &inFlightFence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to wait for in-flight fence!");
+        }
 
-        uint32_t imageIndex;
+        uint32_t imageIndex = 0;
         VkResult result = m_swapChain->acquireNextImage(imageAvailableSemaphores[m_currentFrame], imageIndex);
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
@@ -144,42 +156,51 @@ namespace vkp
             throw std::runtime_error("Failed to acquire swap chain image!");
         }
 
-        if (imagesInFlight[imageIndex] != VK_NULL_HANDLE && imagesInFlight[imageIndex] != inFlightFence)
+        const VkFence imageFence = m_syncManager->getImageInFlight(imageIndex);
+        if (imageFence != VK_NULL_HANDLE && imageFence != inFlightFence)
         {
-            vkWaitForFences(m_context->getDevice(), 1, &imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+            // 该图像仍被更早的帧占用，先等其完成
+            if (vkWaitForFences(m_context->getDevice(), 1, &imageFence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Failed to wait for swap chain image fence!");
+            }
         }
-        imagesInFlight[imageIndex] = inFlightFence;
+        m_syncManager->setImageInFlight(imageIndex, inFlightFence);
 
-        vkResetFences(m_context->getDevice(), 1, &inFlightFence);
+        if (vkResetFences(m_context->getDevice(), 1, &inFlightFence) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to reset in-flight fence!");
+        }
 
-        VkSubmitInfo submitInfo{};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[m_currentFrame] };
-        VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-        submitInfo.waitSemaphoreCount = 1;
-        submitInfo.pWaitSemaphores = waitSemaphores;
-        submitInfo.pWaitDstStageMask = waitStages;
-        submitInfo.commandBufferCount = 1;
-        VkCommandBuffer cmdBuffer = m_commandManager->getCommandBuffers()[imageIndex];
-        submitInfo.pCommandBuffers = &cmdBuffer;
+        const std::array<VkSemaphore, 1> waitSemaphores{ imageAvailableSemaphores[m_currentFrame] };
+        const std::array<VkPipelineStageFlags, 1> waitStages{ VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+        const std::array<VkSemaphore, 1> signalSemaphores{ renderFinishedSemaphores[imageIndex] };
+        const VkCommandBuffer commandBuffer = m_commandManager->getCommandBuffers()[imageIndex];
 
-        VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[imageIndex] };
-        submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores = signalSemaphores;
-
+        VkSubmitInfo submitInfo{
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .waitSemaphoreCount = 1,
+            .pWaitSemaphores = waitSemaphores.data(),
+            .pWaitDstStageMask = waitStages.data(),
+            .commandBufferCount = 1,
+            .pCommandBuffers = &commandBuffer,
+            .signalSemaphoreCount = 1,
+            .pSignalSemaphores = signalSemaphores.data(),
+        };
         if (vkQueueSubmit(m_context->getGraphicsQueue(), 1, &submitInfo, inFlightFence) != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to submit draw command buffer!");
         }
 
-        VkPresentInfoKHR presentInfo{};
-        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores = signalSemaphores;
-        VkSwapchainKHR swapChains[] = { m_swapChain->getSwapChain() };
-        presentInfo.swapchainCount = 1;
-        presentInfo.pSwapchains = swapChains;
-        presentInfo.pImageIndices = &imageIndex;
+        const std::array<VkSwapchainKHR, 1> swapChains{ m_swapChain->getSwapChain() };
+        VkPresentInfoKHR presentInfo{
+            .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .waitSemaphoreCount = 1,
+            .pWaitSemaphores = signalSemaphores.data(),
+            .swapchainCount = 1,
+            .pSwapchains = swapChains.data(),
+            .pImageIndices = &imageIndex,
+        };
 
         result = vkQueuePresentKHR(m_context->getPresentQueue(), &presentInfo);
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
@@ -187,7 +208,7 @@ namespace vkp
             recreateSwapChain();
             return;
         }
-        else if (result != VK_SUCCESS)
+        if (result != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to present swap chain image!");
         }

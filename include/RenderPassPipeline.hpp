@@ -1,3 +1,4 @@
+// RenderPassPipeline.hpp
 #pragma once
 
 #include <vulkan/vulkan.h>
@@ -16,10 +17,10 @@ namespace vkp
         RenderPassPipeline(const RenderPassPipeline&) = delete;
         RenderPassPipeline& operator=(const RenderPassPipeline&) = delete;
 
-        VkRenderPass getRenderPass() const { return m_renderPass; }
-        VkPipelineLayout getPipelineLayout() const { return m_pipelineLayout; }
-        VkPipeline getGraphicsPipeline() const { return m_graphicsPipeline; }
-        VkDescriptorSetLayout getDescriptorSetLayout() const { return m_descriptorSetLayout; }
+        [[nodiscard]] VkRenderPass getRenderPass() const { return m_renderPass; }
+        [[nodiscard]] VkPipelineLayout getPipelineLayout() const { return m_pipelineLayout; }
+        [[nodiscard]] VkPipeline getGraphicsPipeline() const { return m_graphicsPipeline; }
+        [[nodiscard]] VkDescriptorSetLayout getDescriptorSetLayout() const { return m_descriptorSetLayout; }
 
     private:
         void createRenderPass(VulkanContext& context, SwapChain& swapChain);

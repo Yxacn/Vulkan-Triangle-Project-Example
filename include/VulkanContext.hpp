@@ -1,5 +1,7 @@
+// VulkanContext.hpp
 #pragma once
 
+#include <optional>
 #include <vector>
 
 #define GLFW_INCLUDE_VULKAN
@@ -18,30 +20,32 @@ namespace vkp
         VulkanContext(const VulkanContext&) = delete;
         VulkanContext& operator=(const VulkanContext&) = delete;
 
-        VkInstance getInstance() const { return m_instance; }
-        VkPhysicalDevice getPhysicalDevice() const { return m_physicalDevice; }
-        VkDevice getDevice() const { return m_device; }
-        VkSurfaceKHR getSurface() const { return m_surface; }
-        VkQueue getGraphicsQueue() const { return m_graphicsQueue; }
-        VkQueue getPresentQueue() const { return m_presentQueue; }
+        [[nodiscard]] VkInstance getInstance() const { return m_instance; }
+        [[nodiscard]] VkPhysicalDevice getPhysicalDevice() const { return m_physicalDevice; }
+        [[nodiscard]] VkDevice getDevice() const { return m_device; }
+        [[nodiscard]] VkSurfaceKHR getSurface() const { return m_surface; }
+        [[nodiscard]] VkQueue getGraphicsQueue() const { return m_graphicsQueue; }
+        [[nodiscard]] VkQueue getPresentQueue() const { return m_presentQueue; }
 
         void waitIdle() const { vkDeviceWaitIdle(m_device); }
 
         struct QueueFamilyIndices
         {
-            int graphicsFamily = -1;
-            int presentFamily = -1;
-            bool isComplete() const { return graphicsFamily >= 0 && presentFamily >= 0; }
+            // 找不到时保持空值，避免使用 -1 哨兵
+            std::optional<uint32_t> graphicsFamily;
+            std::optional<uint32_t> presentFamily;
+
+            [[nodiscard]] bool isComplete() const { return graphicsFamily.has_value() && presentFamily.has_value(); }
         };
-        QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+        [[nodiscard]] QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) const;
 
         struct SwapChainSupportDetails
         {
-            VkSurfaceCapabilitiesKHR capabilities;
+            VkSurfaceCapabilitiesKHR capabilities{};
             std::vector<VkSurfaceFormatKHR> formats;
             std::vector<VkPresentModeKHR> presentModes;
         };
-        SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
+        [[nodiscard]] SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) const;
 
     private:
         void createInstance(const VkApplicationInfo& appInfo, const VkInstanceCreateInfo& instanceCreateInfo);
@@ -50,8 +54,8 @@ namespace vkp
         void pickPhysicalDevice();
         void createLogicalDevice();
 
-        bool checkDeviceExtensionSupport(VkPhysicalDevice device);
-        bool isDeviceSuitable(VkPhysicalDevice device);
+        [[nodiscard]] bool checkDeviceExtensionSupport(VkPhysicalDevice device) const;
+        [[nodiscard]] bool isDeviceSuitable(VkPhysicalDevice device) const;
         void destroyResources() noexcept;
 
         VkInstance m_instance{ VK_NULL_HANDLE };
@@ -61,15 +65,6 @@ namespace vkp
         VkDevice m_device{ VK_NULL_HANDLE };
         VkQueue m_graphicsQueue{ VK_NULL_HANDLE };
         VkQueue m_presentQueue{ VK_NULL_HANDLE };
-
-        // 配置常量
-        const std::vector<const char*> m_validationLayers = { "VK_LAYER_KHRONOS_validation" };
-        const std::vector<const char*> m_deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-#ifdef NDEBUG
-        const bool m_enableValidationLayers = false;
-#else
-        const bool m_enableValidationLayers = true;
-#endif
     };
 
 } // namespace vkp

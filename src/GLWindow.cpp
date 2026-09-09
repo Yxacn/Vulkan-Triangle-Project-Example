@@ -1,3 +1,4 @@
+// GLWindow.cpp
 #include "GLWindow.hpp"
 
 #include <stdexcept>
@@ -7,8 +8,8 @@ namespace vkp
 {
     int GLWindow::sm_glfwRefCount{ 0 };
 
-    GLWindow::GLWindow(const WindowInfo& window_info)
-        : m_w_info(window_info)
+    GLWindow::GLWindow(const WindowInfo& windowInfo)
+        : m_windowInfo(windowInfo)
     {
         initWindow();
         createWindow();
@@ -25,7 +26,7 @@ namespace vkp
     }
 
     GLWindow::GLWindow(GLWindow&& other) noexcept
-        : m_w_info(std::move(other.m_w_info))
+        : m_windowInfo(std::move(other.m_windowInfo))
         , m_window(other.m_window)
     {
         other.m_window = nullptr;
@@ -42,7 +43,7 @@ namespace vkp
                     glfwTerminate();
             }
 
-            m_w_info = std::move(other.m_w_info);
+            m_windowInfo = std::move(other.m_windowInfo);
             m_window = other.m_window;
             other.m_window = nullptr;
         }
@@ -54,11 +55,11 @@ namespace vkp
         if (sm_glfwRefCount++ == 0 && !glfwInit())
         {
             --sm_glfwRefCount;
-            throw std::runtime_error("Failed to init glfw!");
+            throw std::runtime_error("Failed to init GLFW!");
         }
 
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // 无 OpenGL
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);   // 禁止调整大小
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // 无 OpenGL 上下文
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);   // 固定窗口大小
     }
 
     void GLWindow::createWindow()
@@ -66,20 +67,25 @@ namespace vkp
         if (m_window)
             return;
 
-        m_window = glfwCreateWindow(m_w_info.WindowWidth, m_w_info.WindowHeight, m_w_info.WindowTitle.c_str(), nullptr,
-                                    nullptr);
+        m_window =
+            glfwCreateWindow(m_windowInfo.width, m_windowInfo.height, m_windowInfo.title.c_str(), nullptr, nullptr);
         if (!m_window)
         {
             if (--sm_glfwRefCount == 0)
                 glfwTerminate();
-            throw std::runtime_error("Failed create glfw window");
+            throw std::runtime_error("Failed to create GLFW window!");
         }
         centerWindow();
     }
 
-    GLFWwindow* GLWindow::getWindowInstance() const
+    [[nodiscard]] GLFWwindow* GLWindow::getWindowInstance() const
     {
         return m_window;
+    }
+
+    [[nodiscard]] bool GLWindow::shouldClose() const
+    {
+        return m_window != nullptr && glfwWindowShouldClose(m_window);
     }
 
     void GLWindow::centerWindow()
@@ -95,11 +101,11 @@ namespace vkp
         if (!mode)
             return;
 
-        int winWidth, winHeight;
-        glfwGetWindowSize(m_window, &winWidth, &winHeight);
+        int windowWidth, windowHeight;
+        glfwGetWindowSize(m_window, &windowWidth, &windowHeight);
 
-        int x = (mode->width - winWidth) / 2;
-        int y = (mode->height - winHeight) / 2;
+        const int x = (mode->width - windowWidth) / 2;
+        const int y = (mode->height - windowHeight) / 2;
 
         glfwSetWindowPos(m_window, x, y);
     }

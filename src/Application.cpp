@@ -1,19 +1,18 @@
+// Application.cpp
 #include "Application.hpp"
 
 #include <utility>
 
 namespace vkp
 {
-    Application::Application(const WindowInfo& window_info, const VkApplicationInfo& app_info,
-                             const VkInstanceCreateInfo& instance_create_info)
-        : m_glw(window_info)
-        , m_vke(m_glw.getWindowInstance(), app_info, instance_create_info)
+    Application::Application(const WindowInfo& windowInfo, const VkApplicationInfo& appInfo,
+                             const VkInstanceCreateInfo& instanceCreateInfo)
+        : m_glw(windowInfo)
+        , m_vke(m_glw.getWindowInstance(), appInfo, instanceCreateInfo)
     {
     }
 
-    Application::~Application()
-    {
-    }
+    Application::~Application() {}
 
     Application::Application(Application&& other) noexcept
         : m_glw(std::move(other.m_glw))
@@ -33,7 +32,7 @@ namespace vkp
 
     void Application::run()
     {
-        while (!glfwWindowShouldClose(m_glw.getWindowInstance()))
+        while (!m_glw.shouldClose())
         {
             m_vke.drawFrame();
             glfwWaitEvents();

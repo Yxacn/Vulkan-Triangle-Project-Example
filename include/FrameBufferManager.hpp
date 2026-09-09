@@ -1,3 +1,4 @@
+// FrameBufferManager.hpp
 #pragma once
 
 #include <vector>
@@ -19,7 +20,7 @@ namespace vkp
         FrameBufferManager(const FrameBufferManager&) = delete;
         FrameBufferManager& operator=(const FrameBufferManager&) = delete;
 
-        const std::vector<VkFramebuffer>& getFramebuffers() const { return m_swapChainFramebuffers; }
+        [[nodiscard]] const std::vector<VkFramebuffer>& getFramebuffers() const { return m_swapChainFramebuffers; }
 
         void recreateFramebuffers(VulkanContext& context, SwapChain& swapChain, VkRenderPass renderPass);
 

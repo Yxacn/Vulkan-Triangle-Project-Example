@@ -1,3 +1,4 @@
+// CommandManager.cpp
 #include "CommandManager.hpp"
 
 #include <stdexcept>
@@ -21,18 +22,17 @@ namespace vkp
         if (!m_context)
             return;
 
-        VkDevice device = m_context->getDevice();
         if (m_commandPool)
-            vkDestroyCommandPool(device, m_commandPool, nullptr);
+            vkDestroyCommandPool(m_context->getDevice(), m_commandPool, nullptr);
     }
 
     void CommandManager::createCommandPool(VulkanContext& context)
     {
-        auto indices = context.findQueueFamilies(context.getPhysicalDevice());
+        const VulkanContext::QueueFamilyIndices indices = context.findQueueFamilies(context.getPhysicalDevice());
         VkCommandPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        poolInfo.queueFamilyIndex = indices.graphicsFamily;
+        poolInfo.queueFamilyIndex = indices.graphicsFamily.value();
 
         if (vkCreateCommandPool(context.getDevice(), &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS)
         {
@@ -40,20 +40,22 @@ namespace vkp
         }
     }
 
+    // 交换链重建后，按当前图像数量重新录制全部命令缓冲
     void CommandManager::recordCommandBuffers(VulkanContext& context, SwapChain& swapChain,
                                               RenderPassPipeline& pipeline, FrameBufferManager& framebufferManager,
                                               BufferManager& bufferManager)
     {
         const auto& framebuffers = framebufferManager.getFramebuffers();
-        uint32_t imageCount = static_cast<uint32_t>(framebuffers.size());
+        const uint32_t imageCount = static_cast<uint32_t>(framebuffers.size());
+        const uint32_t indexCount = bufferManager.getIndexCount();
 
         if (!m_commandBuffers.empty())
         {
             vkFreeCommandBuffers(context.getDevice(), m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()),
-                                  m_commandBuffers.data());
+                                 m_commandBuffers.data());
             m_commandBuffers.clear();
         }
-        m_commandBuffers.resize(imageCount);
+        m_commandBuffers.assign(imageCount, VK_NULL_HANDLE);
 
         VkCommandBufferAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -66,11 +68,10 @@ namespace vkp
             throw std::runtime_error("Failed to allocate command buffers!");
         }
 
-        for (uint32_t i = 0; i < imageCount; i++)
+        for (uint32_t i = 0; i < imageCount; ++i)
         {
             VkCommandBufferBeginInfo beginInfo{};
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
             if (vkBeginCommandBuffer(m_commandBuffers[i], &beginInfo) != VK_SUCCESS)
             {
                 throw std::runtime_error("Failed to begin command buffer!");
@@ -83,18 +84,14 @@ namespace vkp
             renderPassInfo.renderArea.offset = { 0, 0 };
             renderPassInfo.renderArea.extent = swapChain.getExtent();
 
-            VkClearValue clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+            VkClearValue clearColor = { { 0.0f, 0.0f, 0.0f, 1.0f } };
             renderPassInfo.clearValueCount = 1;
             renderPassInfo.pClearValues = &clearColor;
 
             vkCmdBeginRenderPass(m_commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
             vkCmdBindPipeline(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.getGraphicsPipeline());
-
-            bufferManager.bindBuffers(m_commandBuffers[i], pipeline.getPipelineLayout(), static_cast<uint32_t>(i));
-
-            vkCmdDrawIndexed(m_commandBuffers[i], 3, 1, 0, 0, 0);
-
+            bufferManager.bindBuffers(m_commandBuffers[i], pipeline.getPipelineLayout(), i);
+            vkCmdDrawIndexed(m_commandBuffers[i], indexCount, 1, 0, 0, 0);
             vkCmdEndRenderPass(m_commandBuffers[i]);
 
             if (vkEndCommandBuffer(m_commandBuffers[i]) != VK_SUCCESS)

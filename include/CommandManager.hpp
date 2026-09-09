@@ -1,3 +1,4 @@
+// CommandManager.hpp
 #pragma once
 
 #include <vector>
@@ -24,8 +25,8 @@ namespace vkp
         void recordCommandBuffers(VulkanContext& context, SwapChain& swapChain, RenderPassPipeline& pipeline,
                                   FrameBufferManager& framebufferManager, BufferManager& bufferManager);
 
-        const std::vector<VkCommandBuffer>& getCommandBuffers() const { return m_commandBuffers; }
-        VkCommandPool getCommandPool() const { return m_commandPool; }
+        [[nodiscard]] const std::vector<VkCommandBuffer>& getCommandBuffers() const { return m_commandBuffers; }
+        [[nodiscard]] VkCommandPool getCommandPool() const { return m_commandPool; }
 
     private:
         void createCommandPool(VulkanContext& context);

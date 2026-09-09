@@ -1,3 +1,4 @@
+// BufferManager.cpp
 #include "BufferManager.hpp"
 
 #include <cstring>
@@ -8,6 +9,47 @@
 #include "SwapChain.hpp"
 #include "VulkanContext.hpp"
 
+namespace
+{
+    class ScopedCommandBuffer
+    {
+    public:
+        ScopedCommandBuffer(VkDevice device, VkCommandPool pool)
+            : m_device(device)
+            , m_pool(pool)
+        {
+            VkCommandBufferAllocateInfo allocInfo{};
+            allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            allocInfo.commandPool = m_pool;
+            allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            allocInfo.commandBufferCount = 1;
+
+            if (vkAllocateCommandBuffers(m_device, &allocInfo, &m_buffer) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Failed to allocate command buffer for copy!");
+            }
+        }
+
+        ~ScopedCommandBuffer()
+        {
+            if (m_buffer)
+            {
+                vkFreeCommandBuffers(m_device, m_pool, 1, &m_buffer);
+            }
+        }
+
+        ScopedCommandBuffer(const ScopedCommandBuffer&) = delete;
+        ScopedCommandBuffer& operator=(const ScopedCommandBuffer&) = delete;
+
+        [[nodiscard]] VkCommandBuffer get() const { return m_buffer; }
+
+    private:
+        VkDevice m_device{ VK_NULL_HANDLE };
+        VkCommandPool m_pool{ VK_NULL_HANDLE };
+        VkCommandBuffer m_buffer{ VK_NULL_HANDLE };
+    };
+} // namespace
+
 namespace vkp
 {
     BufferManager::BufferManager(VulkanContext& context, SwapChain& swapChain, RenderPassPipeline& pipeline,
@@ -15,6 +57,7 @@ namespace vkp
         : m_context(&context)
         , m_swapChain(&swapChain)
     {
+        vkGetPhysicalDeviceMemoryProperties(context.getPhysicalDevice(), &m_memoryProperties);
         try
         {
             createVertexBuffer(context, cmdManager);
@@ -40,36 +83,65 @@ namespace vkp
         if (!m_context)
             return;
 
-        VkDevice device = m_context->getDevice();
-        for (size_t i = 0; i < m_uniformBuffers.size(); i++)
+        const VkDevice device = m_context->getDevice();
+        for (size_t i = 0; i < m_uniformBuffers.size(); ++i)
         {
-            if (m_uniformBuffersMapped[i])
+            if (i < m_uniformBuffersMapped.size() && m_uniformBuffersMapped[i] != nullptr)
+            {
                 vkUnmapMemory(device, m_uniformBuffersMemory[i]);
-            if (m_uniformBuffers[i])
+                m_uniformBuffersMapped[i] = nullptr;
+            }
+            if (m_uniformBuffers[i] != VK_NULL_HANDLE)
+            {
                 vkDestroyBuffer(device, m_uniformBuffers[i], nullptr);
-            if (m_uniformBuffersMemory[i])
+                m_uniformBuffers[i] = VK_NULL_HANDLE;
+            }
+            if (i < m_uniformBuffersMemory.size() && m_uniformBuffersMemory[i] != VK_NULL_HANDLE)
+            {
                 vkFreeMemory(device, m_uniformBuffersMemory[i], nullptr);
+                m_uniformBuffersMemory[i] = VK_NULL_HANDLE;
+            }
         }
+        m_uniformBuffers.clear();
+        m_uniformBuffersMemory.clear();
+        m_uniformBuffersMapped.clear();
+
         if (m_descriptorPool)
+        {
             vkDestroyDescriptorPool(device, m_descriptorPool, nullptr);
+            m_descriptorPool = VK_NULL_HANDLE;
+        }
+        m_descriptorSets.clear();
+
         if (m_indexBuffer)
+        {
             vkDestroyBuffer(device, m_indexBuffer, nullptr);
+            m_indexBuffer = VK_NULL_HANDLE;
+        }
         if (m_indexBufferMemory)
+        {
             vkFreeMemory(device, m_indexBufferMemory, nullptr);
+            m_indexBufferMemory = VK_NULL_HANDLE;
+        }
         if (m_vertexBuffer)
+        {
             vkDestroyBuffer(device, m_vertexBuffer, nullptr);
+            m_vertexBuffer = VK_NULL_HANDLE;
+        }
         if (m_vertexBufferMemory)
+        {
             vkFreeMemory(device, m_vertexBufferMemory, nullptr);
+            m_vertexBufferMemory = VK_NULL_HANDLE;
+        }
     }
 
-    uint32_t BufferManager::findMemoryType(VulkanContext& context, uint32_t typeFilter,
-                                           VkMemoryPropertyFlags properties)
+    uint32_t BufferManager::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const
     {
-        VkPhysicalDeviceMemoryProperties memProperties;
-        vkGetPhysicalDeviceMemoryProperties(context.getPhysicalDevice(), &memProperties);
-        for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+        for (uint32_t i = 0; i < m_memoryProperties.memoryTypeCount; ++i)
         {
-            if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+            const bool typeMatches = (typeFilter & (1u << i)) != 0;
+            const bool propertiesMatch = (m_memoryProperties.memoryTypes[i].propertyFlags & properties) == properties;
+            if (typeMatches && propertiesMatch)
             {
                 return i;
             }
@@ -96,7 +168,7 @@ namespace vkp
         VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = findMemoryType(context, memRequirements.memoryTypeBits, properties);
+        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
 
         if (vkAllocateMemory(context.getDevice(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
         {
@@ -118,137 +190,116 @@ namespace vkp
     void BufferManager::copyBuffer(VulkanContext& context, CommandManager& cmdManager, VkBuffer srcBuffer,
                                    VkBuffer dstBuffer, VkDeviceSize size)
     {
-        VkCommandPool pool = cmdManager.getCommandPool();
-        VkCommandBufferAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.commandPool = pool;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = 1;
-
-        VkCommandBuffer commandBuffer{ VK_NULL_HANDLE };
-        if (vkAllocateCommandBuffers(context.getDevice(), &allocInfo, &commandBuffer) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to allocate command buffer for copy!");
-        }
-
-        const auto freeCommandBuffer = [&]() {
-            vkFreeCommandBuffers(context.getDevice(), pool, 1, &commandBuffer);
-        };
+        // 一次性命令缓冲，拷贝完成后由 RAII 自动归还
+        const VkCommandPool pool = cmdManager.getCommandPool();
+        const ScopedCommandBuffer commandBuffer(context.getDevice(), pool);
+        const VkCommandBuffer cmdBuffer = commandBuffer.get();
 
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
+        if (vkBeginCommandBuffer(cmdBuffer, &beginInfo) != VK_SUCCESS)
         {
-            freeCommandBuffer();
             throw std::runtime_error("Failed to begin command buffer for copy!");
         }
 
         VkBufferCopy copyRegion{};
         copyRegion.size = size;
-        vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+        vkCmdCopyBuffer(cmdBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
-        if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
+        if (vkEndCommandBuffer(cmdBuffer) != VK_SUCCESS)
         {
-            freeCommandBuffer();
             throw std::runtime_error("Failed to record copy command buffer!");
         }
 
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &commandBuffer;
+        submitInfo.pCommandBuffers = &cmdBuffer;
 
         if (vkQueueSubmit(context.getGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
         {
-            freeCommandBuffer();
             throw std::runtime_error("Failed to submit copy command buffer!");
         }
         if (vkQueueWaitIdle(context.getGraphicsQueue()) != VK_SUCCESS)
         {
-            freeCommandBuffer();
             throw std::runtime_error("Failed to wait for buffer copy!");
         }
+    }
 
-        freeCommandBuffer();
+    // 顶点/索引缓冲统一走 staging 三步：主机填充 -> 一次性拷贝 -> 设备本地缓冲。
+    // 异常路径由 destroyStaging 回收 staging 资源，目标缓冲交给 destroyResources 兜底。
+    void BufferManager::createDeviceLocalBuffer(VulkanContext& context, CommandManager& cmdManager,
+                                                std::span<const std::byte> data, VkBufferUsageFlags usage,
+                                                VkBuffer& buffer, VkDeviceMemory& bufferMemory)
+    {
+        const VkDeviceSize size = static_cast<VkDeviceSize>(data.size());
+        VkBuffer stagingBuffer{ VK_NULL_HANDLE };
+        VkDeviceMemory stagingBufferMemory{ VK_NULL_HANDLE };
+
+        const auto destroyStaging = [&]()
+        {
+            if (stagingBuffer)
+            {
+                vkDestroyBuffer(context.getDevice(), stagingBuffer, nullptr);
+                stagingBuffer = VK_NULL_HANDLE;
+            }
+            if (stagingBufferMemory)
+            {
+                vkFreeMemory(context.getDevice(), stagingBufferMemory, nullptr);
+                stagingBufferMemory = VK_NULL_HANDLE;
+            }
+        };
+
+        try
+        {
+            createBuffer(context, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer,
+                         stagingBufferMemory);
+
+            void* mapped = nullptr;
+            if (vkMapMemory(context.getDevice(), stagingBufferMemory, 0, size, 0, &mapped) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Failed to map staging buffer memory!");
+            }
+            std::memcpy(mapped, data.data(), data.size());
+            vkUnmapMemory(context.getDevice(), stagingBufferMemory);
+
+            createBuffer(context, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                         buffer, bufferMemory);
+            copyBuffer(context, cmdManager, stagingBuffer, buffer, size);
+        }
+        catch (...)
+        {
+            destroyStaging();
+            throw;
+        }
+
+        destroyStaging();
     }
 
     void BufferManager::createVertexBuffer(VulkanContext& context, CommandManager& cmdManager)
     {
-        VkDeviceSize bufferSize = sizeof(m_vertices[0]) * m_vertices.size();
-
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingBufferMemory;
-        createBuffer(context, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer,
-                     stagingBufferMemory);
-
-        try
-        {
-            void* data = nullptr;
-            if (vkMapMemory(context.getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data) != VK_SUCCESS)
-                throw std::runtime_error("Failed to map staging buffer memory!");
-            memcpy(data, m_vertices.data(), static_cast<size_t>(bufferSize));
-            vkUnmapMemory(context.getDevice(), stagingBufferMemory);
-
-            createBuffer(context, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_vertexBuffer, m_vertexBufferMemory);
-            copyBuffer(context, cmdManager, stagingBuffer, m_vertexBuffer, bufferSize);
-        }
-        catch (...)
-        {
-            vkDestroyBuffer(context.getDevice(), stagingBuffer, nullptr);
-            vkFreeMemory(context.getDevice(), stagingBufferMemory, nullptr);
-            throw;
-        }
-
-        vkDestroyBuffer(context.getDevice(), stagingBuffer, nullptr);
-        vkFreeMemory(context.getDevice(), stagingBufferMemory, nullptr);
+        createDeviceLocalBuffer(context, cmdManager, std::as_bytes(std::span(m_vertices)),
+                                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, m_vertexBuffer, m_vertexBufferMemory);
     }
 
     void BufferManager::createIndexBuffer(VulkanContext& context, CommandManager& cmdManager)
     {
-        VkDeviceSize bufferSize = sizeof(m_indices[0]) * m_indices.size();
-
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingBufferMemory;
-        createBuffer(context, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer,
-                     stagingBufferMemory);
-
-        try
-        {
-            void* data = nullptr;
-            if (vkMapMemory(context.getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data) != VK_SUCCESS)
-                throw std::runtime_error("Failed to map staging buffer memory!");
-            memcpy(data, m_indices.data(), static_cast<size_t>(bufferSize));
-            vkUnmapMemory(context.getDevice(), stagingBufferMemory);
-
-            createBuffer(context, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_indexBuffer, m_indexBufferMemory);
-            copyBuffer(context, cmdManager, stagingBuffer, m_indexBuffer, bufferSize);
-        }
-        catch (...)
-        {
-            vkDestroyBuffer(context.getDevice(), stagingBuffer, nullptr);
-            vkFreeMemory(context.getDevice(), stagingBufferMemory, nullptr);
-            throw;
-        }
-
-        vkDestroyBuffer(context.getDevice(), stagingBuffer, nullptr);
-        vkFreeMemory(context.getDevice(), stagingBufferMemory, nullptr);
+        createDeviceLocalBuffer(context, cmdManager, std::as_bytes(std::span(m_indices)),
+                                VK_BUFFER_USAGE_INDEX_BUFFER_BIT, m_indexBuffer, m_indexBufferMemory);
     }
 
     void BufferManager::createUniformBuffers(VulkanContext& context)
     {
-        uint32_t imageCount = m_swapChain->getImageCount();
-        constexpr VkDeviceSize bufferSize = sizeof(glm::mat4) * 3;
+        const uint32_t imageCount = m_swapChain->getImageCount();
+        constexpr VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
         m_uniformBuffers.resize(imageCount);
         m_uniformBuffersMemory.resize(imageCount);
         m_uniformBuffersMapped.resize(imageCount);
 
-        for (uint32_t i = 0; i < imageCount; i++)
+        for (uint32_t i = 0; i < imageCount; ++i)
         {
             createBuffer(context, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -264,7 +315,7 @@ namespace vkp
 
     void BufferManager::createDescriptorPool(VulkanContext& context)
     {
-        uint32_t imageCount = m_swapChain->getImageCount();
+        const uint32_t imageCount = m_swapChain->getImageCount();
 
         VkDescriptorPoolSize poolSize{};
         poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -284,7 +335,7 @@ namespace vkp
 
     void BufferManager::createDescriptorSets(VulkanContext& context, RenderPassPipeline& pipeline)
     {
-        uint32_t imageCount = m_swapChain->getImageCount();
+        const uint32_t imageCount = m_swapChain->getImageCount();
         std::vector<VkDescriptorSetLayout> layouts(imageCount, pipeline.getDescriptorSetLayout());
 
         VkDescriptorSetAllocateInfo allocInfo{};
@@ -299,33 +350,28 @@ namespace vkp
             throw std::runtime_error("Failed to allocate descriptor sets!");
         }
 
-        for (uint32_t i = 0; i < imageCount; i++)
+        for (uint32_t i = 0; i < imageCount; ++i)
         {
-            VkDescriptorBufferInfo bufferInfo{};
-            bufferInfo.buffer = m_uniformBuffers[i];
-            bufferInfo.offset = 0;
-            bufferInfo.range = sizeof(glm::mat4) * 3;
-
-            VkWriteDescriptorSet descriptorWrite{};
-            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrite.dstSet = m_descriptorSets[i];
-            descriptorWrite.dstBinding = 0;
-            descriptorWrite.dstArrayElement = 0;
-            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            descriptorWrite.descriptorCount = 1;
-            descriptorWrite.pBufferInfo = &bufferInfo;
+            VkDescriptorBufferInfo bufferInfo{ .buffer = m_uniformBuffers[i],
+                                               .offset = 0,
+                                               .range = sizeof(UniformBufferObject) };
+            VkWriteDescriptorSet descriptorWrite{
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = m_descriptorSets[i],
+                .dstBinding = 0,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .pBufferInfo = &bufferInfo,
+            };
 
             vkUpdateDescriptorSets(context.getDevice(), 1, &descriptorWrite, 0, nullptr);
         }
     }
 
-    void BufferManager::updateUniformBuffer(uint32_t currentImage, const glm::mat4& model, const glm::mat4& view,
-                                            const glm::mat4& proj)
+    void BufferManager::updateUniformBuffer(uint32_t currentImage, const UniformBufferObject& ubo)
     {
-        void* data = m_uniformBuffersMapped[currentImage];
-        memcpy(data, &model, sizeof(glm::mat4));
-        memcpy(static_cast<char*>(data) + sizeof(glm::mat4), &view, sizeof(glm::mat4));
-        memcpy(static_cast<char*>(data) + 2 * sizeof(glm::mat4), &proj, sizeof(glm::mat4));
+        std::memcpy(m_uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
     }
 
     void BufferManager::bindBuffers(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout,
