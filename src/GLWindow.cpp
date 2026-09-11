@@ -17,12 +17,7 @@ namespace vkp
 
     GLWindow::~GLWindow()
     {
-        if (!m_window)
-            return;
-
         destroyWindow();
-        if (--sm_glfwRefCount == 0)
-            glfwTerminate();
     }
 
     GLWindow::GLWindow(GLWindow&& other) noexcept
@@ -36,12 +31,7 @@ namespace vkp
     {
         if (this != &other)
         {
-            if (m_window)
-            {
-                destroyWindow();
-                if (--sm_glfwRefCount == 0)
-                    glfwTerminate();
-            }
+            destroyWindow();
 
             m_windowInfo = std::move(other.m_windowInfo);
             m_window = other.m_window;
@@ -58,9 +48,8 @@ namespace vkp
             throw std::invalid_argument("Window dimensions must be positive!");
         }
 
-        if (sm_glfwRefCount++ == 0 && !glfwInit())
+        if (sm_glfwRefCount == 0 && !glfwInit())
         {
-            --sm_glfwRefCount;
             throw std::runtime_error("Failed to init GLFW!");
         }
 
@@ -77,10 +66,12 @@ namespace vkp
             glfwCreateWindow(m_windowInfo.width, m_windowInfo.height, m_windowInfo.title.c_str(), nullptr, nullptr);
         if (!m_window)
         {
-            if (--sm_glfwRefCount == 0)
+            if (sm_glfwRefCount == 0)
                 glfwTerminate();
             throw std::runtime_error("Failed to create GLFW window!");
         }
+
+        ++sm_glfwRefCount;
         centerWindow();
     }
 
@@ -128,6 +119,8 @@ namespace vkp
         {
             glfwDestroyWindow(m_window);
             m_window = nullptr;
+            if (--sm_glfwRefCount == 0)
+                glfwTerminate();
         }
     }
 } // namespace vkp

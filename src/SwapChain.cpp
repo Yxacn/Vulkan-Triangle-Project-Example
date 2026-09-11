@@ -162,6 +162,10 @@ namespace vkp
             createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
             const VulkanContext::QueueFamilyIndices indices = context.findQueueFamilies(context.getPhysicalDevice());
+            if (!indices.isComplete())
+            {
+                throw std::runtime_error("Failed to find required queue families!");
+            }
             const uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
             if (indices.graphicsFamily != indices.presentFamily)
             {

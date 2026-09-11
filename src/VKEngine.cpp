@@ -133,6 +133,19 @@ namespace vkp
 
     void VKEngine::recreateSwapChain()
     {
+        // 最小化/恢复过程中帧缓冲尺寸可能瞬时为 0，此时没有可用的交换链尺寸，
+        // 保留旧交换链，等待下一次事件触发重建
+        if (m_window != nullptr)
+        {
+            int width = 0;
+            int height = 0;
+            glfwGetFramebufferSize(m_window, &width, &height);
+            if (width <= 0 || height <= 0)
+            {
+                return;
+            }
+        }
+
         m_context->waitIdle();
 
         // 先销毁依赖旧交换链的上层资源，再原地重建交换链；

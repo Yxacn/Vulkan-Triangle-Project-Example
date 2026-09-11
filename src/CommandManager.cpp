@@ -29,6 +29,11 @@ namespace vkp
     void CommandManager::createCommandPool(VulkanContext& context)
     {
         const VulkanContext::QueueFamilyIndices indices = context.findQueueFamilies(context.getPhysicalDevice());
+        if (!indices.isComplete())
+        {
+            throw std::runtime_error("Failed to find required queue families!");
+        }
+
         VkCommandPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -65,6 +70,7 @@ namespace vkp
 
         if (vkAllocateCommandBuffers(context.getDevice(), &allocInfo, m_commandBuffers.data()) != VK_SUCCESS)
         {
+            m_commandBuffers.clear();
             throw std::runtime_error("Failed to allocate command buffers!");
         }
 
@@ -84,7 +90,7 @@ namespace vkp
             renderPassInfo.renderArea.offset = { 0, 0 };
             renderPassInfo.renderArea.extent = swapChain.getExtent();
 
-            VkClearValue clearColor = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+            VkClearValue clearColor = { { { 0.0f, 0.0f, 0.0f, 1.0f } } };
             renderPassInfo.clearValueCount = 1;
             renderPassInfo.pClearValues = &clearColor;
 

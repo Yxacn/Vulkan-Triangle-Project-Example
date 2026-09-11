@@ -47,10 +47,14 @@ pacman -S mingw-w64-ucrt-x86_64-gcc \
           mingw-w64-ucrt-x86_64-cmake \
           mingw-w64-ucrt-x86_64-vulkan-headers \
           mingw-w64-ucrt-x86_64-vulkan-loader \
+          mingw-w64-ucrt-x86_64-vulkan-validation-layers \
+          mingw-w64-ucrt-x86_64-shaderc \
           mingw-w64-ucrt-x86_64-glm \
           mingw-w64-ucrt-x86_64-gdb
 ```
+
 ---
+
 ## 构建与运行
 ### 1. 克隆项目
 ```
@@ -58,14 +62,14 @@ git clone <repository-url>
 cd <project-directory>
 ```
 
-### 2.使用 CMake 构建
+### 2. 使用 CMake 构建
 ```
 mkdir build && cd build
 cmake ..   # 默认 Debug（启用验证层）；高性能构建改用 -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 ```
 
-### 3.运行
+### 3. 运行
 ```
 ./VkProject.exe
 ```
@@ -78,4 +82,4 @@ cmake --build .
 构建系统通过 CMake 注入 SHADER_DIR（指向构建目录下的 shaders/），代码中亦保留 "shaders/" 作为回退路径。
 
 ### 窗口大小：
-当前窗口大小固定（800×600），不可调整。如需可调整，可修改 GLWindow::initWindow() 中的 GLFW_RESIZABLE 为 GLFW_TRUE，并实现 recreateSwapChain 逻辑（已支持）
+当前窗口大小固定（800×600），不可调整。如需可调整，可修改 GLWindow::initWindow() 中的 GLFW_RESIZABLE 为 GLFW_TRUE；交换链重建逻辑已支持窗口尺寸变化。

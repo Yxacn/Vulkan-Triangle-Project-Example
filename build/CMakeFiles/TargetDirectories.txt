@@ -1,4 +1,0 @@
-E:/VkProject/build/CMakeFiles/shaders.dir
-E:/VkProject/build/CMakeFiles/VkProject.dir
-E:/VkProject/build/CMakeFiles/edit_cache.dir
-E:/VkProject/build/CMakeFiles/rebuild_cache.dir

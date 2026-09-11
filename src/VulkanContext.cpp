@@ -362,6 +362,10 @@ namespace vkp
     void VulkanContext::createLogicalDevice()
     {
         const QueueFamilyIndices indices = findQueueFamilies(m_physicalDevice);
+        if (!indices.isComplete())
+        {
+            throw std::runtime_error("Failed to find required queue families!");
+        }
         const uint32_t graphicsFamily = indices.graphicsFamily.value();
         const uint32_t presentFamily = indices.presentFamily.value();
 
@@ -381,6 +385,7 @@ namespace vkp
             ++queueCreateInfoCount;
         }
 
+        // 本项目不使用可选设备特性
         const VkPhysicalDeviceFeatures deviceFeatures{};
 
         VkDeviceCreateInfo createInfo{};

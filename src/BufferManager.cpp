@@ -183,10 +183,23 @@ namespace vkp
 
         VkMemoryRequirements memRequirements;
         vkGetBufferMemoryRequirements(context.getDevice(), buffer, &memRequirements);
+
+        uint32_t memoryTypeIndex = 0;
+        try
+        {
+            memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+        }
+        catch (...)
+        {
+            vkDestroyBuffer(context.getDevice(), buffer, nullptr);
+            buffer = VK_NULL_HANDLE;
+            throw;
+        }
+
         VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+        allocInfo.memoryTypeIndex = memoryTypeIndex;
 
         if (vkAllocateMemory(context.getDevice(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
         {
