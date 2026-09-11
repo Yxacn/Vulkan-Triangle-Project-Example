@@ -79,3 +79,17 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     glm::glm
     glfw
 )
+
+# exe 已静态链接 C++ 运行库，但验证层等动态库仍需匹配的 MinGW 运行库；
+# 复制到输出目录，避免 PATH 中其他环境（如 Git for Windows）的同名旧 DLL 被抢先加载
+if(MINGW)
+    get_filename_component(MINGW_RUNTIME_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    foreach(RUNTIME_DLL libstdc++-6.dll libgcc_s_seh-1.dll libwinpthread-1.dll)
+        if(EXISTS "${MINGW_RUNTIME_DIR}/${RUNTIME_DLL}")
+            add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                        "${MINGW_RUNTIME_DIR}/${RUNTIME_DLL}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+            )
+        endif()
+    endforeach()
+endif()
