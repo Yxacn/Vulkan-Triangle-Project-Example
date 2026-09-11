@@ -157,9 +157,10 @@ namespace vkp
             {
                 extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
             }
-            // 去重：同一扩展重复出现会触发验证层告警
-            std::ranges::sort(extensions);
-            const auto [uniqueBegin, uniqueEnd] = std::ranges::unique(extensions);
+            // 去重：同一扩展重复出现会触发验证层告警；按字符串内容而非指针地址比较
+            const auto toName = [](const char* name) { return std::string_view(name); };
+            std::ranges::sort(extensions, {}, toName);
+            const auto [uniqueBegin, uniqueEnd] = std::ranges::unique(extensions, {}, toName);
             extensions.erase(uniqueBegin, uniqueEnd);
 
             createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
@@ -176,8 +177,8 @@ namespace vkp
             {
                 layers.insert(layers.end(), kValidationLayers.begin(), kValidationLayers.end());
             }
-            std::ranges::sort(layers);
-            const auto [uniqueLayerBegin, uniqueLayerEnd] = std::ranges::unique(layers);
+            std::ranges::sort(layers, {}, toName);
+            const auto [uniqueLayerBegin, uniqueLayerEnd] = std::ranges::unique(layers, {}, toName);
             layers.erase(uniqueLayerBegin, uniqueLayerEnd);
             createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
             createInfo.ppEnabledLayerNames = layers.data();

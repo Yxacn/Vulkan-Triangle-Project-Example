@@ -20,6 +20,23 @@
 
 namespace vkp
 {
+    namespace
+    {
+        // noexcept 路径（析构/移动赋值）等待设备空闲：即使等待失败（如设备丢失）也不能让异常逃逸
+        void waitIdleQuietly(VulkanContext* context) noexcept
+        {
+            if (!context)
+                return;
+            try
+            {
+                context->waitIdle();
+            }
+            catch (...)
+            {
+            }
+        }
+    } // namespace
+
     VKEngine::VKEngine(GLFWwindow* window, const VkApplicationInfo& appInfo,
                        const VkInstanceCreateInfo& instanceCreateInfo)
         : m_window(window)
@@ -30,8 +47,7 @@ namespace vkp
 
     VKEngine::~VKEngine()
     {
-        if (m_context)
-            m_context->waitIdle();
+        waitIdleQuietly(m_context.get());
     }
 
     VKEngine::VKEngine(VKEngine&& other) noexcept
@@ -53,8 +69,7 @@ namespace vkp
     {
         if (this != &other)
         {
-            if (m_context)
-                m_context->waitIdle();
+            waitIdleQuietly(m_context.get());
 
             destroyFrameResources();
             m_swapChain.reset();
@@ -110,7 +125,8 @@ namespace vkp
     void VKEngine::destroyFrameResources() noexcept
     {
         m_syncManager.reset();
-        m_bufferManager->destroyUniformResources();
+        if (m_bufferManager)
+            m_bufferManager->destroyUniformResources();
         m_framebufferManager.reset();
         m_pipeline.reset();
     }
@@ -171,14 +187,13 @@ namespace vkp
 
         uint32_t imageIndex = 0;
         VkResult result = m_swapChain->acquireNextImage(imageAvailableSemaphores[m_currentFrame], imageIndex);
-        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+        if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
-            // 表面尺寸与交换链不匹配（窗口调整/最小化恢复）；SUBOPTIMAL 虽可继续呈现，
-            // 但与 OUT_OF_DATE 统一走重建路径，逻辑更简单
+            // 表面尺寸与交换链不匹配（窗口调整/最小化恢复）
             recreateSwapChain();
             return;
         }
-        if (result != VK_SUCCESS)
+        if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         {
             throw std::runtime_error("Failed to acquire swap chain image!");
         }

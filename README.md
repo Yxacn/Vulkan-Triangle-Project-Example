@@ -16,7 +16,7 @@
 - 顶点着色器与片段着色器（GLSL 450），支持 SPIR‑V 编译
 - Uniform Buffer Object (UBO) 实现模型‑视图‑投影矩阵
 - 双缓冲帧同步（信号量 + 围栏）
-- 支持交换链重建（窗口大小变化自动适配）
+- 支持交换链重建（表面尺寸变化时自动适配）
 - Debug 模式下默认启用 Vulkan 验证层
 
 ---
@@ -26,7 +26,7 @@
 - **[Vulkan SDK](https://vulkan.lunarg.com/)** (≥ 1.3)  
   提供 Vulkan 头文件、库、验证层以及 `glslc` 着色器编译工具。
 - **[GLFW](https://www.glfw.org/)** (≥ 3.3)  
-  用于创建窗口并管理 Vulkan 表面。
+  用于创建窗口并管理 Vulkan 表面，已随仓库提供（`glfw/` 目录内含头文件与静态库），无需单独安装。
 - **[GLM](https://github.com/g-truc/glm)** (≥ 0.9.9)  
   用于数学运算（矩阵、向量）。
 - **支持 C++20 的编译器**（GCC 10+ / Clang 11+ / MSVC 2019 16.11+）
@@ -47,7 +47,6 @@ pacman -S mingw-w64-ucrt-x86_64-gcc \
           mingw-w64-ucrt-x86_64-cmake \
           mingw-w64-ucrt-x86_64-vulkan-headers \
           mingw-w64-ucrt-x86_64-vulkan-loader \
-          mingw-w64-ucrt-x86_64-glfw \
           mingw-w64-ucrt-x86_64-glm \
           mingw-w64-ucrt-x86_64-gdb
 ```

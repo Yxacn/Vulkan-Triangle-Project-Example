@@ -1,0 +1,62 @@
+{
+	"abstract" : true,
+	"artifacts" : 
+	[
+		{
+			"path" : "E:/MSYS2/ucrt64/bin/glslangValidator.exe"
+		}
+	],
+	"backtrace" : 3,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_executable",
+			"find_package"
+		],
+		"files" : 
+		[
+			"E:/MSYS2/ucrt64/share/cmake/Modules/FindVulkan.cmake",
+			"CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 1
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 11,
+				"parent" : 0
+			},
+			{
+				"file" : 0,
+				"parent" : 1
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 808,
+				"parent" : 2
+			}
+		]
+	},
+	"codemodelVersion" : 
+	{
+		"major" : 2,
+		"minor" : 11
+	},
+	"id" : "Vulkan::glslangValidator::@6890427a1f51a3e7e1df",
+	"imported" : true,
+	"local" : true,
+	"name" : "Vulkan::glslangValidator",
+	"nameOnDisk" : "glslangValidator.exe",
+	"paths" : 
+	{
+		"build" : ".",
+		"source" : "."
+	},
+	"sources" : [],
+	"type" : "EXECUTABLE"
+}
